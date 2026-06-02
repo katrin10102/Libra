@@ -266,7 +266,7 @@ export const Settings: React.FC<SettingsProps> = ({ onSettingsChange }) => {
               <CheckCircle2 size={20} />
             </div>
             <div className="text-sm">
-              <p className="font-bold text-gray-800 mb-0.5">Libra v3.0</p>
+              <p className="font-bold text-gray-800 mb-0.5">Libra v4.0</p>
               <p className="text-gray-500 text-xs leading-relaxed">{t('settings.versionDesc')}</p>
             </div>
           </div>

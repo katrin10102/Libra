@@ -145,6 +145,7 @@ const en = {
   'reading.progress': 'Progress',
 
   'calendar.title': 'Calendar',
+  'calendar.subtitle': 'Reading calendar and history',
   'calendar.activity': 'Reading activity',
   'calendar.forMonth': 'For {month}',
   'calendar.forYear': 'For {year} year',
@@ -265,7 +266,7 @@ const uk: Record<keyof typeof en, string> = {
   'nav.history': 'Статистика',
   'nav.calendar': 'Календар',
   'nav.statistics': 'Статистика',
-  'nav.settings': 'Налаштування',
+  'nav.settings': 'Опції',
 
   'common.back': 'Назад',
   'common.save': 'Зберегти',
@@ -402,6 +403,7 @@ const uk: Record<keyof typeof en, string> = {
   'reading.progress': 'Прогрес',
 
   'calendar.title': 'Календар',
+  'calendar.subtitle': 'Календар читання та історія',
   'calendar.activity': 'Читацька активність',
   'calendar.forMonth': 'За {month}',
   'calendar.forYear': 'За {year} рік',
@@ -418,7 +420,7 @@ const uk: Record<keyof typeof en, string> = {
   'calendar.sun': 'Нд',
 
   'stats.title': 'Моя полиця',
-  'stats.subtitle': 'Статистика паперової бібліотеки',
+  'stats.subtitle': 'Дані про ваші паперові книги',
   'stats.history': 'Історія читання',
   'stats.historySubtitle': 'Прочитане за місяць / рік',
   'stats.completedTitle': 'Прочитане',
@@ -452,7 +454,7 @@ const uk: Record<keyof typeof en, string> = {
   'stats.empty': 'Ваша паперова полиця порожня',
   'stats.emptyDesc': 'Додайте книги з форматом "Паперова", щоб побачити статистику',
 
-  'settings.title': 'Налаштування',
+  'settings.title': 'Опції',
   'settings.subtitle': 'Дані та зовнішній вигляд',
   'settings.interface': 'Інтерфейс',
   'settings.language': 'Мова додатку',

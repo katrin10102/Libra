@@ -89,6 +89,7 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
       if (format === 'Audio') {
           updateBook({
               ...book,
+              status: 'Reading',
               selectedReadingFormat: 'Audio',
               readingPagesTotal: 100
           });
@@ -147,6 +148,7 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
       if (tempFormat && tempPagesTotal > 0) {
           updateBook({
               ...book,
+              status: 'Reading',
               selectedReadingFormat: tempFormat,
               readingPagesTotal: tempPagesTotal
           });

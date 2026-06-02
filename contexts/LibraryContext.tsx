@@ -129,8 +129,12 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         finalBook.pagesRead = 0;
         finalBook.sessions = []; // Clear reading history
         finalBook.rating = undefined; // Clear rating as it's not read
-        finalBook.selectedReadingFormat = undefined;
-        finalBook.readingPagesTotal = undefined;
+        if (!updatedBook.selectedReadingFormat) {
+          finalBook.selectedReadingFormat = undefined;
+        }
+        if (!updatedBook.readingPagesTotal) {
+          finalBook.readingPagesTotal = undefined;
+        }
         
         if (finalBook.status === 'Wishlist') {
           finalBook.addedAt = '';

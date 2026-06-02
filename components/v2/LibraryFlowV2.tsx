@@ -863,7 +863,7 @@ export const LibraryFlowV2: React.FC<LibraryFlowV2Props> = ({ onNavigateToReadin
           </div>
           <button
             onClick={onNavigateToStatistics}
-            className="w-10 h-10 rounded-xl bg-gray-50 text-gray-400 flex items-center justify-center hover:text-indigo-600 hover:bg-indigo-50 transition-all active:scale-95"
+            className="w-10 h-10 rounded-xl bg-white border border-gray-100 shadow-sm flex items-center justify-center text-indigo-600 hover:bg-gray-50/50 transition-all active:scale-95"
             title={t('nav.statistics')}
           >
             <BookOpen size={20} />
@@ -931,8 +931,8 @@ export const LibraryFlowV2: React.FC<LibraryFlowV2Props> = ({ onNavigateToReadin
               setShowSortPanel((prev) => !prev);
               setShowFilters(false);
             }}
-            className={`h-12 w-12 flex-shrink-0 rounded-xl flex items-center justify-center shadow-sm active:scale-95 transition-all ${
-              showSortPanel ? 'bg-indigo-600 text-white shadow-indigo-200' : 'bg-white text-indigo-600 border border-indigo-200'
+            className={`relative h-12 w-12 flex-shrink-0 border rounded-xl flex items-center justify-center shadow-sm active:scale-95 transition-all ${
+              showSortPanel ? 'bg-white text-indigo-600 border-indigo-200' : 'bg-white text-gray-400 border-gray-100'
             }`}
             title={t('library.sort')}
           >
@@ -956,7 +956,7 @@ export const LibraryFlowV2: React.FC<LibraryFlowV2Props> = ({ onNavigateToReadin
           )}
         </div>
         {showSortPanel && (
-          <div className="bg-white p-4 rounded-[1.5rem] shadow-sm border border-gray-100 space-y-3">
+          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
             <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">{t('sort.sortBy')}</h3>
             <div className="grid grid-cols-3 gap-2">
               {(['title', 'author', 'addedAt', 'genre'] as Exclude<V2SortKey, 'custom'>[]).map((key) => {
@@ -966,8 +966,8 @@ export const LibraryFlowV2: React.FC<LibraryFlowV2Props> = ({ onNavigateToReadin
                     key={key}
                     type="button"
                     onClick={() => handleSortChange(key)}
-                    className={`py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
-                      isActive ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                    className={`py-2.5 rounded-xl font-bold text-xs transition-all border flex items-center justify-center gap-1.5 ${
+                      isActive ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100/50'
                     }`}
                   >
                     <span>{key === 'title' ? t('sort.title') : key === 'author' ? t('sort.author') : key === 'addedAt' ? t('sort.date') : t('sort.genre')}</span>
@@ -979,10 +979,10 @@ export const LibraryFlowV2: React.FC<LibraryFlowV2Props> = ({ onNavigateToReadin
                 type="button"
                 onClick={toggleReorderMode}
                 disabled={sortedBooks.length < 2}
-                className={`py-2.5 rounded-xl font-bold text-xs transition-all ${
+                className={`py-2.5 rounded-xl font-bold text-xs transition-all border ${
                   isReorderMode || sortKeyByTab[currentTab] === 'custom'
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
-                    : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                    ? 'bg-indigo-100 text-indigo-700 border-indigo-200'
+                    : 'bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100/50'
                 } disabled:opacity-40 disabled:cursor-not-allowed`}
               >
                 {t('sort.customOrder')}

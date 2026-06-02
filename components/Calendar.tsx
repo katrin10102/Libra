@@ -234,9 +234,6 @@ export const Calendar: React.FC = () => {
                                 : 'border-gray-50 bg-gray-50/50'
                     }`}
                 >
-                    <span className={`text-[10px] absolute top-1 left-1 font-bold z-10 text-gray-500 ${reads.length > 0 ? 'bg-white/80 backdrop-blur-md px-1.5 py-0.5 rounded-lg shadow-sm' : ''}`}>
-                    {day}
-                    </span>
                     {reads.length === 1 && (
                       <div className="w-full h-full relative">
                         <BookCover book={reads[0]} className="w-full h-full" iconSize={12} />
@@ -257,6 +254,13 @@ export const Calendar: React.FC = () => {
                         </div>
                       </div>
                     )}
+                    <span className={`text-[10px] absolute top-1 left-1 font-bold z-20 transition-all ${
+                        reads.length > 0 
+                            ? 'bg-white/95 text-gray-900 shadow px-1.5 py-0.5 rounded-lg border border-gray-100' 
+                            : 'text-gray-500'
+                    }`}>
+                      {day}
+                    </span>
                 </div>
                 );
             })}
@@ -284,7 +288,7 @@ export const Calendar: React.FC = () => {
                         onClick={() => handleMonthClick(idx)}
                         className={`aspect-[4/5] bg-gray-50 rounded-2xl border flex flex-col items-center p-2 relative overflow-hidden transition-all hover:border-indigo-300 active:scale-95 ${isCurrentMonth ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-50/30' : 'border-gray-100'}`}
                       >
-                          <span className={`text-[10px] font-bold uppercase mb-2 ${isCurrentMonth ? 'text-indigo-700' : 'text-gray-500'}`}>{mName}</span>
+                          <span className={`text-[10px] font-bold uppercase mb-2 ${isCurrentMonth ? 'text-indigo-600 font-extrabold' : 'text-gray-800'}`}>{mName}</span>
                           
                           {booksInMonth.length > 0 ? (
                               <div className="grid grid-cols-2 gap-1 w-full flex-1 content-start">
@@ -315,14 +319,11 @@ export const Calendar: React.FC = () => {
   return (
     <>
       <div className="p-4 space-y-6 pb-24 text-gray-800 animate-in fade-in duration-500">
-        <header className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold tracking-tight">{t('calendar.title')}</h1>
-          <button 
-              onClick={() => setViewMode(viewMode === 'month' ? 'year' : 'month')}
-              className="w-12 h-12 bg-white rounded-2xl border border-gray-100 text-gray-400 shadow-sm active:scale-95 transition-all flex items-center justify-center hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100"
-          >
-              {viewMode === 'month' ? <Grid size={22} /> : <CalendarIcon size={22} />}
-          </button>
+        <header className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800 tracking-tight">{t('calendar.title')}</h1>
+            <p className="text-gray-500 text-sm mt-1">{t('calendar.subtitle')}</p>
+          </div>
         </header>
 
         {/* Main Calendar Card */}
@@ -341,8 +342,8 @@ export const Calendar: React.FC = () => {
                onClick={() => setViewMode(viewMode === 'month' ? 'year' : 'month')}
                className="text-xl font-bold capitalize flex items-center gap-2 px-4 py-2 rounded-2xl hover:bg-gray-50 transition-colors"
             >
-               {viewMode === 'month' && <span className="text-gray-300 font-medium">{year}</span>}
-               <span className="text-indigo-950">{viewMode === 'month' ? monthName : year}</span>
+               {viewMode === 'month' && <span className="text-gray-400 font-medium">{year}</span>}
+               <span className="text-gray-800">{viewMode === 'month' ? monthName : year}</span>
             </button>
 
             <button onClick={handleNext} className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 rounded-xl transition-colors text-gray-400">
@@ -362,9 +363,9 @@ export const Calendar: React.FC = () => {
                   <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">{t('calendar.activity')}</h3>
                   <p className="text-sm font-bold text-gray-800 flex items-center gap-2">
                       {selectedDay ? (
-                          <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg">{selectedDay} {monthName}</span>
+                          <span className="text-indigo-600 bg-indigo-50/50 border border-indigo-100/30 px-2 py-0.5 rounded-lg">{selectedDay} {monthName}</span>
                       ) : (
-                          <span className="text-gray-600">{viewMode === 'month' ? t('calendar.forMonth', { month: monthName.toLowerCase() }) : t('calendar.forYear', { year: year })}</span>
+                          <span className="text-gray-800">{viewMode === 'month' ? t('calendar.forMonth', { month: monthName.toLowerCase() }) : t('calendar.forYear', { year: year })}</span>
                       )}
                   </p>
                </div>

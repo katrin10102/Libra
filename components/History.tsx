@@ -12,13 +12,49 @@ import {
   Tags,
   Zap,
   TrendingUp,
-  FileText
+  FileText,
+  Flame,
+  Target,
+  Award,
+  Check,
+  X,
+  Edit3,
+  ThumbsDown,
+  ShoppingCart,
+  Crown,
+  Library
 } from 'lucide-react';
 import { useLibrary } from '../contexts/LibraryContext';
 import { useI18n } from '../contexts/I18nContext';
 import { BookCover } from './ui/BookCover';
 import { getBookPageTotal } from '../utils';
 import { Book } from '../types';
+
+const getLabel = (key: string, lang: string) => {
+  const dictionary: Record<string, { uk: string; en: string }> = {
+    statistics: { uk: 'Статистика', en: 'Statistics' },
+    goals: { uk: 'Цілі', en: 'Goals' },
+    streak: { uk: 'Серія читання', en: 'Reading streak' },
+    streakDesc: { uk: 'кількість днів читання поспіль', en: 'consecutive reading days' },
+    dailyGoal: { uk: 'Щоденна ціль', en: 'Daily goal' },
+    dailyGoalDesc: { uk: 'кількість прочитаних сторінок за поточний день', en: 'pages read today' },
+    monthlyGoal: { uk: 'Ціль на місяць', en: 'Monthly goal' },
+    monthlyGoalDesc: { uk: 'кількість прочитаних книг за поточний місяць', en: 'books read this month' },
+    yearlyGoal: { uk: 'Ціль на рік', en: 'Yellow goal' }, // We'll label it "Ціль на рік" / "Yearly goal"
+    yearlyGoalDesc: { uk: 'кількість прочитаних книг за поточний рік', en: 'books read this year' },
+    edit: { uk: 'Редагувати', en: 'Edit' },
+    save: { uk: 'Зберегти', en: 'Save' },
+    cancel: { uk: 'Скасувати', en: 'Cancel' },
+    pages: { uk: 'ст.', en: 'p.' },
+    books: { uk: 'книг', en: 'books' },
+    days: { uk: 'дн.', en: 'days' },
+  };
+  // Fix spelling for yearlyGoal
+  if (key === 'yearlyGoal') {
+    return lang === 'uk' ? 'Ціль на рік' : 'Yearly goal';
+  }
+  return dictionary[key]?.[lang === 'uk' ? 'uk' : 'en'] || key;
+};
 
 const formatCompletedDate = (date: Date, locale: string) => {
   const lang = locale === 'uk' ? 'uk-UA' : 'en-US';
@@ -104,6 +140,135 @@ const BookItem: React.FC<{ book: Book; locale: string; t: any; extraInfo?: React
 export const History: React.FC = () => {
   const { books } = useLibrary();
   const { t, locale } = useI18n();
+
+  const [currentSubTab, setCurrentSubTab] = useState<'stats' | 'goals'>(() => {
+    return (localStorage.getItem('history_sub_tab') as 'stats' | 'goals') || 'stats';
+  });
+
+  const [dailyGoalTarget, setDailyGoalTarget] = useState<number>(() => {
+    const val = localStorage.getItem('goals_daily_pages');
+    return val ? parseInt(val, 10) : 20;
+  });
+
+  const [monthlyGoalTarget, setMonthlyGoalTarget] = useState<number>(() => {
+    const val = localStorage.getItem('goals_monthly_books');
+    return val ? parseInt(val, 10) : 3;
+  });
+
+  const [yearlyGoalTarget, setYearlyGoalTarget] = useState<number>(() => {
+    const val = localStorage.getItem('goals_yearly_books');
+    return val ? parseInt(val, 10) : 30;
+  });
+
+  const [isEditingDaily, setIsEditingDaily] = useState(false);
+  const [tempDailyInput, setTempDailyInput] = useState('');
+
+  const [isEditingMonthly, setIsEditingMonthly] = useState(false);
+  const [tempMonthlyInput, setTempMonthlyInput] = useState('');
+
+  const [isEditingYearly, setIsEditingYearly] = useState(false);
+  const [tempYearlyInput, setTempYearlyInput] = useState('');
+
+  useEffect(() => {
+    localStorage.setItem('history_sub_tab', currentSubTab);
+  }, [currentSubTab]);
+
+  useEffect(() => {
+    localStorage.setItem('goals_daily_pages', dailyGoalTarget.toString());
+  }, [dailyGoalTarget]);
+
+  useEffect(() => {
+    localStorage.setItem('goals_monthly_books', monthlyGoalTarget.toString());
+  }, [monthlyGoalTarget]);
+
+  useEffect(() => {
+    localStorage.setItem('goals_yearly_books', yearlyGoalTarget.toString());
+  }, [yearlyGoalTarget]);
+
+  const streak = useMemo(() => {
+    const dates = new Set<string>();
+    books.forEach(b => {
+      b.sessions?.forEach(s => {
+        if (s.date) {
+          dates.add(s.date.trim());
+        }
+      });
+    });
+
+    if (dates.size === 0) return 0;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    const hasReadToday = dates.has(todayStr);
+    const hasReadYesterday = dates.has(yesterdayStr);
+
+    if (!hasReadToday && !hasReadYesterday) {
+      return 0;
+    }
+
+    let currentStreak = 0;
+    const testDate = hasReadToday ? new Date() : yesterday;
+
+    for (let i = 0; i < 365; i++) {
+      const dateStr = testDate.toISOString().split('T')[0];
+      if (dates.has(dateStr)) {
+        currentStreak++;
+        testDate.setDate(testDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+
+    return currentStreak;
+  }, [books]);
+
+  const dailyPagesRead = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    let total = 0;
+    books.forEach(b => {
+      b.sessions?.forEach(s => {
+        if (s.date === todayStr) {
+          total += Number(s.pages) || 0;
+        }
+      });
+    });
+    return total;
+  }, [books]);
+
+  const monthlyBooksRead = useMemo(() => {
+    const now = new Date();
+    const prefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    let count = 0;
+    books.forEach(b => {
+      let isCompletedThisMonth = false;
+      if (b.completedDates && b.completedDates.length > 0) {
+        isCompletedThisMonth = b.completedDates.some(d => d.startsWith(prefix));
+      } else if (b.completedAt) {
+        isCompletedThisMonth = b.completedAt.startsWith(prefix);
+      }
+      if (isCompletedThisMonth) count++;
+    });
+    return count;
+  }, [books]);
+
+  const yearlyBooksRead = useMemo(() => {
+    const now = new Date();
+    const prefix = `${now.getFullYear()}-`;
+    let count = 0;
+    books.forEach(b => {
+      let isCompletedThisYear = false;
+      if (b.completedDates && b.completedDates.length > 0) {
+        isCompletedThisYear = b.completedDates.some(d => d.startsWith(prefix));
+      } else if (b.completedAt) {
+        isCompletedThisYear = b.completedAt.startsWith(prefix);
+      }
+      if (isCompletedThisYear) count++;
+    });
+    return count;
+  }, [books]);
 
   const [startDate, setStartDate] = useState(() => {
     const saved = localStorage.getItem('history_start_date');
@@ -285,303 +450,590 @@ export const History: React.FC = () => {
     setOpenSection(openSection === id ? null : id);
   };
 
+  const currentLanguage = locale === 'uk-UA' ? 'uk' : 'en';
+
   return (
-    <div className="p-4 space-y-6 pb-32 animate-in fade-in duration-500">
-      <header>
-        <h1 className="text-3xl font-bold text-gray-800 tracking-tight">{t('nav.history')}</h1>
-        <p className="text-gray-500 text-sm mt-1">
-          {t('stats.completedSubtitle')}
-        </p>
-      </header>
-
-      {/* Date Range Picker Controls */}
-      <div className="space-y-3">
-        {/* Mode Switcher */}
-        <div className="flex bg-gray-100 p-1 rounded-2xl">
-          <button
-            onClick={() => {
-              setStatsMode('month');
-              localStorage.setItem('history_stats_mode', 'month');
-            }}
-            className={`flex-1 text-center py-2 text-xs font-bold rounded-xl transition-all ${
-              statsMode === 'month'
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            {t('stats.modeMonth' as any)}
-          </button>
-          <button
-            onClick={() => {
-              setStatsMode('custom');
-              localStorage.setItem('history_stats_mode', 'custom');
-            }}
-            className={`flex-1 text-center py-2 text-xs font-bold rounded-xl transition-all ${
-              statsMode === 'custom'
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            {t('stats.modeCustom' as any)}
-          </button>
-        </div>
-
-        {statsMode === 'month' ? (
-          <section className="bg-white rounded-[2rem] border border-gray-100 px-5 py-3 shadow-sm flex items-center justify-between">
+    <div className="p-4 pb-32 animate-in fade-in duration-500">
+      {/* Subtab Switcher matched to match Library list header design */}
+      <div className="sticky top-0 z-30 -mx-4 px-4 -mt-4 pt-4 pb-2 bg-slate-50/95 backdrop-blur-sm">
+        <header className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
             <button
-              onClick={() => {
-                setSelectedMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-              }}
-              className="w-10 h-10 rounded-xl bg-gray-50 hover:bg-gray-100 active:scale-95 flex items-center justify-center text-gray-600 transition-all"
+              onClick={() => setCurrentSubTab('stats')}
+              className={`text-3xl font-bold transition-colors ${currentSubTab === 'stats' ? 'text-gray-800' : 'text-gray-300'}`}
             >
-              <ChevronLeft size={18} />
+              {getLabel('statistics', currentLanguage)}
             </button>
-            <span className="text-sm font-black text-gray-700 uppercase tracking-wider capitalize">
-              {selectedMonthDate.toLocaleString(locale, { month: 'long', year: 'numeric' })}
-            </span>
             <button
-              onClick={() => {
-                setSelectedMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
-              }}
-              className="w-10 h-10 rounded-xl bg-gray-50 hover:bg-gray-100 active:scale-95 flex items-center justify-center text-gray-600 transition-all"
+              onClick={() => setCurrentSubTab('goals')}
+              className={`text-3xl font-bold transition-colors ${currentSubTab === 'goals' ? 'text-gray-800' : 'text-gray-300'}`}
             >
-              <ChevronRight size={18} />
+              {getLabel('goals', currentLanguage)}
             </button>
-          </section>
-        ) : (
-          <section className="bg-white rounded-[2rem] border border-gray-100 px-5 py-4 shadow-sm">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1 min-w-0">
-                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">
-                  {t('stats.startDate')}
-                </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full block bg-gray-50 border-none rounded-xl px-3 py-2.5 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none min-w-0 text-center box-border max-w-full"
-                />
+          </div>
+        </header>
+      </div>
+
+      {currentSubTab === 'stats' ? (
+        <div className="space-y-6 mt-1">
+          <header className="-mt-1">
+            <p className="text-gray-500 text-sm mt-1">
+              {t('stats.completedSubtitle')}
+            </p>
+          </header>
+
+          {/* Date Range Picker Controls */}
+          <div className="space-y-3">
+            {/* Mode Switcher */}
+            <div className="flex bg-gray-100 p-1 rounded-2xl">
+              <button
+                onClick={() => {
+                  setStatsMode('month');
+                  localStorage.setItem('history_stats_mode', 'month');
+                }}
+                className={`flex-1 text-center py-2 text-xs font-bold rounded-xl transition-all ${
+                  statsMode === 'month'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                {t('stats.modeMonth' as any)}
+              </button>
+              <button
+                onClick={() => {
+                  setStatsMode('custom');
+                  localStorage.setItem('history_stats_mode', 'custom');
+                }}
+                className={`flex-1 text-center py-2 text-xs font-bold rounded-xl transition-all ${
+                  statsMode === 'custom'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                {t('stats.modeCustom' as any)}
+              </button>
+            </div>
+
+            {statsMode === 'month' ? (
+              <section className="bg-white rounded-[2rem] border border-gray-100 px-5 py-3 shadow-sm flex items-center justify-between">
+                <button
+                  onClick={() => {
+                    setSelectedMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+                  }}
+                  className="w-10 h-10 rounded-xl bg-gray-50 hover:bg-gray-100 active:scale-95 flex items-center justify-center text-gray-600 transition-all"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <span className="text-sm font-black text-gray-700 uppercase tracking-wider capitalize">
+                  {selectedMonthDate.toLocaleString(locale, { month: 'long', year: 'numeric' })}
+                </span>
+                <button
+                  onClick={() => {
+                    setSelectedMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+                  }}
+                  className="w-10 h-10 rounded-xl bg-gray-50 hover:bg-gray-100 active:scale-95 flex items-center justify-center text-gray-600 transition-all"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </section>
+            ) : (
+              <section className="bg-white rounded-[2rem] border border-gray-100 px-5 py-4 shadow-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1 min-w-0">
+                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">
+                      {t('stats.startDate')}
+                    </label>
+                    <div className="relative flex items-center">
+                      <div className="absolute left-3.5 text-indigo-600 pointer-events-none flex items-center justify-center">
+                        <CalendarDays size={14} />
+                      </div>
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="w-full block bg-gray-50 border-none rounded-xl pl-9 pr-3 py-2.5 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none [&::-webkit-calendar-picker-indicator]:opacity-0 min-w-0 text-center box-border max-w-full"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1 min-w-0">
+                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">
+                      {t('stats.endDate')}
+                    </label>
+                    <div className="relative flex items-center">
+                      <div className="absolute left-3.5 text-indigo-600 pointer-events-none flex items-center justify-center">
+                        <CalendarDays size={14} />
+                      </div>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="w-full block bg-gray-50 border-none rounded-xl pl-9 pr-3 py-2.5 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none [&::-webkit-calendar-picker-indicator]:opacity-0 min-w-0 text-center box-border max-w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+          </div>
+
+          {/* Summary Stats Row */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white rounded-3xl border border-gray-100 p-3 shadow-sm flex flex-col items-center text-center">
+              <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mb-2">
+                <FileText size={16} />
               </div>
-              <div className="space-y-1 min-w-0">
-                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">
-                  {t('stats.endDate')}
-                </label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full block bg-gray-50 border-none rounded-xl px-3 py-2.5 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none min-w-0 text-center box-border max-w-full"
+              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('stats.totalPages')}</p>
+              <p className="text-lg font-black text-gray-800 leading-none">{stats.totalPagesRead}</p>
+            </div>
+            
+            <div className="bg-white rounded-3xl border border-gray-100 p-3 shadow-sm flex flex-col items-center text-center">
+              <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center mb-2">
+                <Zap size={16} />
+              </div>
+              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('stats.avgSpeed')}</p>
+              <p className="text-lg font-black text-gray-800 leading-none">
+                {Math.round(stats.avgSpeed)} <span className="text-[8px] font-bold opacity-40">{t('details.unit.pagesPerHour')}</span>
+              </p>
+            </div>
+
+            <div className="bg-white rounded-3xl border border-gray-100 p-3 shadow-sm flex flex-col items-center text-center">
+              <div className="w-8 h-8 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center mb-2">
+                <TrendingUp size={16} />
+              </div>
+              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('stats.pagesPerDay')}</p>
+              <p className="text-lg font-black text-gray-800 leading-none">
+                {stats.avgPagesPerDay.toFixed(1)}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {/* 1. Completed Fully */}
+            <MetricSection
+              title={t('stats.completedFully')}
+              value={stats.completedBooks.length}
+              icon={<BookOpen size={24} />}
+              isOpen={openSection === 'completed'}
+              onToggle={() => toggleSection('completed')}
+              hasData={stats.completedBooks.length > 0}
+              emptyMessage={t('stats.noCompleted')}
+            >
+              {stats.completedBooks.map((book) => (
+                <BookItem 
+                  key={`${book.id}-${book.completedAt}`} 
+                  book={book} 
+                  locale={locale} 
+                  t={t} 
+                  extraInfo={
+                    <div className="text-right flex-shrink-0 pl-2 border-l border-gray-50 flex flex-col items-end gap-1">
+                      <div className="flex items-center gap-1">
+                        <Star size={10} className={`fill-current ${book.rating && book.rating >= 8 ? 'text-emerald-500' : book.rating && book.rating <= 5 ? 'text-red-400' : 'text-amber-400'}`} />
+                        <span className="text-xs font-black text-gray-800">{book.rating || '-'}</span>
+                      </div>
+                      <p className="text-[9px] font-bold text-gray-400">{formatCompletedDate(new Date(book.completedAt!), locale)}</p>
+                    </div>
+                  }
                 />
+              ))}
+            </MetricSection>
+
+            {/* 2. Largest Book */}
+            <MetricSection
+              title={t('stats.largestBook')}
+              value={stats.largestBook ? `${getBookPageTotal(stats.largestBook)} ${t('details.unit.pages')}` : 0}
+              icon={<Maximize2 size={24} />}
+              isOpen={openSection === 'largest'}
+              onToggle={() => toggleSection('largest')}
+              hasData={!!stats.largestBook}
+            >
+              {stats.largestBook && (
+                <BookItem 
+                  book={stats.largestBook} 
+                  locale={locale} 
+                  t={t} 
+                  extraInfo={
+                    <div className="text-right flex-shrink-0 pl-2 border-l border-gray-50">
+                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('details.pages')}</p>
+                      <p className="text-xs font-black text-indigo-600">{getBookPageTotal(stats.largestBook)}</p>
+                    </div>
+                  }
+                />
+              )}
+            </MetricSection>
+
+            {/* 3. Best Read */}
+            <MetricSection
+              title={t('stats.bestRead')}
+              value={stats.countRating10}
+              icon={<Star size={24} />}
+              isOpen={openSection === 'best'}
+              onToggle={() => toggleSection('best')}
+              hasData={stats.bestBooks.length > 0}
+            >
+              {stats.bestBooks.map((book) => (
+                <BookItem 
+                  key={book.id} 
+                  book={book} 
+                  locale={locale} 
+                  t={t} 
+                  extraInfo={
+                    <div className="text-right flex-shrink-0 pl-2 border-l border-gray-50">
+                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('details.rating')}</p>
+                      <div className="flex items-center gap-1 justify-end">
+                        <Star size={10} className="fill-amber-400 text-amber-400" />
+                        <p className="text-xs font-black text-amber-600">{book.rating}</p>
+                      </div>
+                    </div>
+                  }
+                />
+              ))}
+            </MetricSection>
+
+            {/* 4. Worst Read */}
+            <MetricSection
+              title={t('stats.worstRead')}
+              value={stats.worstBooks.length}
+              icon={<ThumbsDown size={24} />}
+              isOpen={openSection === 'worst'}
+              onToggle={() => toggleSection('worst')}
+              hasData={stats.worstBooks.length > 0}
+            >
+              {stats.worstBooks.map((book) => (
+                <BookItem 
+                  key={book.id} 
+                  book={book} 
+                  locale={locale} 
+                  t={t} 
+                  extraInfo={
+                    <div className="text-right flex-shrink-0 pl-2 border-l border-gray-50">
+                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('details.rating')}</p>
+                      <div className="flex items-center gap-1 justify-end">
+                        <Star size={10} className="fill-red-400 text-red-400" />
+                        <p className="text-xs font-black text-red-600">{book.rating}</p>
+                      </div>
+                    </div>
+                  }
+                />
+              ))}
+            </MetricSection>
+
+            {/* 5. Added Books */}
+            <MetricSection
+              title={t('stats.addedBooksCount')}
+              value={stats.addedBooks.length}
+              icon={<ShoppingCart size={24} />}
+              isOpen={openSection === 'added'}
+              onToggle={() => toggleSection('added')}
+              hasData={stats.addedBooks.length > 0}
+            >
+              {stats.addedBooks.map((book) => (
+                <BookItem 
+                  key={book.id} 
+                  book={book} 
+                  locale={locale} 
+                  t={t} 
+                  extraInfo={
+                    <div className="text-right flex-shrink-0 pl-2 border-l border-gray-50">
+                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('details.added')}</p>
+                      <p className="text-xs font-black text-indigo-600">{formatCompletedDate(new Date(book.addedAt!), locale)}</p>
+                    </div>
+                  }
+                />
+              ))}
+            </MetricSection>
+
+            {/* 6. Genres */}
+            <MetricSection
+              title={t('library.filter.genre')}
+              value={stats.genres.length}
+              icon={<Crown size={24} />}
+              isOpen={openSection === 'genres'}
+              onToggle={() => toggleSection('genres')}
+              hasData={stats.genres.length > 0}
+            >
+              <div className="space-y-2">
+                {stats.genres.map(({ name, count }) => (
+                  <div key={name} className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+                    <span className="text-sm font-bold text-gray-700">{name}</span>
+                    <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-xl text-xs font-black">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </MetricSection>
+
+            {/* 7. Publishers */}
+            <MetricSection
+              title={t('stats.publishers')}
+              value={stats.publishers.length}
+              icon={<Library size={24} />}
+              isOpen={openSection === 'publishers'}
+              onToggle={() => toggleSection('publishers')}
+              hasData={stats.publishers.length > 0}
+            >
+              <div className="space-y-2">
+                {stats.publishers.map(({ name, count }) => (
+                  <div key={name} className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+                    <span className="text-sm font-bold text-gray-700">{name}</span>
+                    <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-xl text-xs font-black">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </MetricSection>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6 mt-1 pb-12">
+          {/* Custom localized header */}
+          <header className="-mt-1">
+            <p className="text-gray-500 text-sm mt-1">
+              {currentLanguage === 'uk' ? 'Налаштуйте власні цілі та відстежуйте свій читацький прогрес' : 'Customize your goals and track your reading progress'}
+            </p>
+          </header>
+
+          <div className="space-y-4">
+            {/* Streak Card */}
+            <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-4 rounded-2xl shadow-lg text-white relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-48 h-48 bg-white opacity-10 rounded-full -translate-y-1/3 translate-x-1/3 blur-2xl" />
+              <Flame className="absolute -right-4 -bottom-4 text-white opacity-10 w-24 h-24 group-hover:scale-110 transition-transform duration-700" />
+              
+              <div className="relative z-10 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-100 mb-0.5">{getLabel('streak', currentLanguage)}</p>
+                  <h2 className="text-3xl font-black">
+                    {streak} {currentLanguage === 'uk' ? 'дн.' : 'days'}
+                  </h2>
+                  <p className="text-xs text-indigo-50 font-medium mt-0.5">{getLabel('streakDesc', currentLanguage)}</p>
+                </div>
+                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center animate-pulse">
+                  <Flame size={24} className="text-indigo-100 fill-indigo-100" />
+                </div>
               </div>
             </div>
-          </section>
-        )}
-      </div>
 
-      {/* Summary Stats Row */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white rounded-3xl border border-gray-100 p-3 shadow-sm flex flex-col items-center text-center">
-          <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mb-2">
-            <FileText size={16} />
-          </div>
-          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('stats.totalPages')}</p>
-          <p className="text-lg font-black text-gray-800 leading-none">{stats.totalPagesRead}</p>
-        </div>
-        
-        <div className="bg-white rounded-3xl border border-gray-100 p-3 shadow-sm flex flex-col items-center text-center">
-          <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center mb-2">
-            <Zap size={16} />
-          </div>
-          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('stats.avgSpeed')}</p>
-          <p className="text-lg font-black text-gray-800 leading-none">
-            {Math.round(stats.avgSpeed)} <span className="text-[8px] font-bold opacity-40">{t('details.unit.pagesPerHour')}</span>
-          </p>
-        </div>
-
-        <div className="bg-white rounded-3xl border border-gray-100 p-3 shadow-sm flex flex-col items-center text-center">
-          <div className="w-8 h-8 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center mb-2">
-            <TrendingUp size={16} />
-          </div>
-          <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('stats.pagesPerDay')}</p>
-          <p className="text-lg font-black text-gray-800 leading-none">
-            {stats.avgPagesPerDay.toFixed(1)}
-          </p>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        {/* 1. Completed Fully */}
-        <MetricSection
-          title={t('stats.completedFully')}
-          value={stats.completedBooks.length}
-          icon={<CalendarDays size={24} />}
-          isOpen={openSection === 'completed'}
-          onToggle={() => toggleSection('completed')}
-          hasData={stats.completedBooks.length > 0}
-          emptyMessage={t('stats.noCompleted')}
-        >
-          {stats.completedBooks.map((book) => (
-            <BookItem 
-              key={`${book.id}-${book.completedAt}`} 
-              book={book} 
-              locale={locale} 
-              t={t} 
-              extraInfo={
-                <div className="text-right flex-shrink-0 pl-2 border-l border-gray-50 flex flex-col items-end gap-1">
-                  <div className="flex items-center gap-1">
-                    <Star size={10} className={`fill-current ${book.rating && book.rating >= 8 ? 'text-emerald-500' : book.rating && book.rating <= 5 ? 'text-red-400' : 'text-amber-400'}`} />
-                    <span className="text-xs font-black text-gray-800">{book.rating || '-'}</span>
+            {/* Daily Pages Goal Card */}
+            <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm space-y-3.5 relative">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                  <Target size={20} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{getLabel('dailyGoal', currentLanguage)}</p>
+                    {!isEditingDaily && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTempDailyInput(dailyGoalTarget.toString());
+                          setIsEditingDaily(true);
+                        }}
+                        className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                      >
+                        <Edit3 size={13} />
+                      </button>
+                    )}
                   </div>
-                  <p className="text-[9px] font-bold text-gray-400">{formatCompletedDate(new Date(book.completedAt!), locale)}</p>
-                </div>
-              }
-            />
-          ))}
-        </MetricSection>
-
-        {/* 2. Largest Book */}
-        <MetricSection
-          title={t('stats.largestBook')}
-          value={stats.largestBook ? `${getBookPageTotal(stats.largestBook)} ${t('details.unit.pages')}` : 0}
-          icon={<Maximize2 size={24} />}
-          isOpen={openSection === 'largest'}
-          onToggle={() => toggleSection('largest')}
-          hasData={!!stats.largestBook}
-        >
-          {stats.largestBook && (
-            <BookItem 
-              book={stats.largestBook} 
-              locale={locale} 
-              t={t} 
-              extraInfo={
-                <div className="text-right flex-shrink-0 pl-2 border-l border-gray-50">
-                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('details.pages')}</p>
-                  <p className="text-xs font-black text-indigo-600">{getBookPageTotal(stats.largestBook)}</p>
-                </div>
-              }
-            />
-          )}
-        </MetricSection>
-
-        {/* 3. Best Read */}
-        <MetricSection
-          title={t('stats.bestRead')}
-          value={stats.countRating10}
-          icon={<Trophy size={24} />}
-          isOpen={openSection === 'best'}
-          onToggle={() => toggleSection('best')}
-          hasData={stats.bestBooks.length > 0}
-        >
-          {stats.bestBooks.map((book) => (
-            <BookItem 
-              key={book.id} 
-              book={book} 
-              locale={locale} 
-              t={t} 
-              extraInfo={
-                <div className="text-right flex-shrink-0 pl-2 border-l border-gray-50">
-                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('details.rating')}</p>
-                  <div className="flex items-center gap-1 justify-end">
-                    <Star size={10} className="fill-amber-400 text-amber-400" />
-                    <p className="text-xs font-black text-amber-600">{book.rating}</p>
+                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                    <span className="text-xl font-black text-gray-800">{dailyPagesRead}</span>
+                    <span className="text-xs text-gray-400">/</span>
+                    {isEditingDaily ? (
+                      <form onSubmit={(e) => {
+                        e.preventDefault();
+                        const val = parseInt(tempDailyInput, 10);
+                        if (!isNaN(val) && val > 0) {
+                          setDailyGoalTarget(val);
+                          setIsEditingDaily(false);
+                        }
+                      }} className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min="1"
+                          value={tempDailyInput}
+                          onChange={(e) => setTempDailyInput(e.target.value)}
+                          className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-lg px-2 py-0.5 w-14 outline-none focus:ring-2 focus:ring-indigo-500"
+                          autoFocus
+                        />
+                        <button type="submit" className="bg-indigo-600 text-white rounded-lg p-0.5 hover:bg-indigo-700 transition">
+                          <Check size={12} />
+                        </button>
+                        <button type="button" onClick={() => setIsEditingDaily(false)} className="bg-gray-100 text-gray-500 rounded-lg p-0.5 hover:bg-gray-200 transition">
+                          <X size={12} />
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <span className="text-xl font-black text-indigo-600">{dailyGoalTarget}</span>
+                        <span className="text-xs font-bold text-gray-400">{getLabel('pages', currentLanguage)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-              }
-            />
-          ))}
-        </MetricSection>
-
-        {/* 4. Worst Read */}
-        <MetricSection
-          title={t('stats.worstRead')}
-          value={stats.worstBooks.length}
-          icon={<Star size={24} />}
-          isOpen={openSection === 'worst'}
-          onToggle={() => toggleSection('worst')}
-          hasData={stats.worstBooks.length > 0}
-        >
-          {stats.worstBooks.map((book) => (
-            <BookItem 
-              key={book.id} 
-              book={book} 
-              locale={locale} 
-              t={t} 
-              extraInfo={
-                <div className="text-right flex-shrink-0 pl-2 border-l border-gray-50">
-                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('details.rating')}</p>
-                  <div className="flex items-center gap-1 justify-end">
-                    <Star size={10} className="fill-red-400 text-red-400" />
-                    <p className="text-xs font-black text-red-600">{book.rating}</p>
-                  </div>
-                </div>
-              }
-            />
-          ))}
-        </MetricSection>
-
-        {/* 5. Added Books */}
-        <MetricSection
-          title={t('stats.addedBooksCount')}
-          value={stats.addedBooks.length}
-          icon={<PlusCircle size={24} />}
-          isOpen={openSection === 'added'}
-          onToggle={() => toggleSection('added')}
-          hasData={stats.addedBooks.length > 0}
-        >
-          {stats.addedBooks.map((book) => (
-            <BookItem 
-              key={book.id} 
-              book={book} 
-              locale={locale} 
-              t={t} 
-              extraInfo={
-                <div className="text-right flex-shrink-0 pl-2 border-l border-gray-50">
-                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('details.added')}</p>
-                  <p className="text-xs font-black text-indigo-600">{formatCompletedDate(new Date(book.addedAt!), locale)}</p>
-                </div>
-              }
-            />
-          ))}
-        </MetricSection>
-
-        {/* 6. Genres */}
-        <MetricSection
-          title={t('library.filter.genre')}
-          value={stats.genres.length}
-          icon={<Tags size={24} />}
-          isOpen={openSection === 'genres'}
-          onToggle={() => toggleSection('genres')}
-          hasData={stats.genres.length > 0}
-        >
-          <div className="space-y-2">
-            {stats.genres.map(({ name, count }) => (
-              <div key={name} className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center justify-between shadow-sm">
-                <span className="text-sm font-bold text-gray-700">{name}</span>
-                <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-xl text-xs font-black">{count}</span>
               </div>
-            ))}
-          </div>
-        </MetricSection>
-
-        {/* 7. Publishers */}
-        <MetricSection
-          title={t('stats.publishers')}
-          value={stats.publishers.length}
-          icon={<Building2 size={24} />}
-          isOpen={openSection === 'publishers'}
-          onToggle={() => toggleSection('publishers')}
-          hasData={stats.publishers.length > 0}
-        >
-          <div className="space-y-2">
-            {stats.publishers.map(({ name, count }) => (
-              <div key={name} className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center justify-between shadow-sm">
-                <span className="text-sm font-bold text-gray-700">{name}</span>
-                <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-xl text-xs font-black">{count}</span>
+              
+              {/* Progress bar and Percentage to the right */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-1 bg-gray-50 rounded-full overflow-hidden border border-gray-100/30">
+                  <div
+                    className="h-full bg-indigo-600 rounded-full transition-all duration-1000 ease-out"
+                    style={{ width: `${Math.min(100, (dailyPagesRead / dailyGoalTarget) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-xs font-black text-gray-800 shrink-0 min-w-[2rem] text-right">
+                  {Math.min(100, Math.round((dailyPagesRead / dailyGoalTarget) * 100))}%
+                </span>
               </div>
-            ))}
+              <p className="text-[9px] text-gray-400 font-semibold">{getLabel('dailyGoalDesc', currentLanguage)}</p>
+            </div>
+
+            {/* Monthly Books Goal Card */}
+            <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm space-y-3.5 relative">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                  <Award size={20} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{getLabel('monthlyGoal', currentLanguage)}</p>
+                    {!isEditingMonthly && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTempMonthlyInput(monthlyGoalTarget.toString());
+                          setIsEditingMonthly(true);
+                        }}
+                        className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                      >
+                        <Edit3 size={13} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                    <span className="text-xl font-black text-gray-800">{monthlyBooksRead}</span>
+                    <span className="text-xs text-gray-400">/</span>
+                    {isEditingMonthly ? (
+                      <form onSubmit={(e) => {
+                        e.preventDefault();
+                        const val = parseInt(tempMonthlyInput, 10);
+                        if (!isNaN(val) && val > 0) {
+                          setMonthlyGoalTarget(val);
+                          setIsEditingMonthly(false);
+                        }
+                      }} className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min="1"
+                          value={tempMonthlyInput}
+                          onChange={(e) => setTempMonthlyInput(e.target.value)}
+                          className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-lg px-2 py-0.5 w-14 outline-none focus:ring-2 focus:ring-indigo-500"
+                          autoFocus
+                        />
+                        <button type="submit" className="bg-indigo-600 text-white rounded-lg p-0.5 hover:bg-indigo-700 transition">
+                          <Check size={12} />
+                        </button>
+                        <button type="button" onClick={() => setIsEditingMonthly(false)} className="bg-gray-100 text-gray-500 rounded-lg p-0.5 hover:bg-gray-200 transition">
+                          <X size={12} />
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <span className="text-xl font-black text-indigo-600">{monthlyGoalTarget}</span>
+                        <span className="text-xs font-bold text-gray-400">{getLabel('books', currentLanguage)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Progress bar and Percentage to the right */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-1 bg-gray-50 rounded-full overflow-hidden border border-gray-100/30">
+                  <div
+                    className="h-full bg-indigo-600 rounded-full transition-all duration-1000 ease-out"
+                    style={{ width: `${Math.min(100, (monthlyBooksRead / monthlyGoalTarget) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-xs font-black text-gray-800 shrink-0 min-w-[2rem] text-right">
+                  {Math.min(100, Math.round((monthlyBooksRead / monthlyGoalTarget) * 100))}%
+                </span>
+              </div>
+              <p className="text-[9px] text-gray-400 font-semibold">{getLabel('monthlyGoalDesc', currentLanguage)}</p>
+            </div>
+
+            {/* Yearly Books Goal Card */}
+            <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm space-y-3.5 relative">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                  <CalendarDays size={20} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{getLabel('yearlyGoal', currentLanguage)}</p>
+                    {!isEditingYearly && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTempYearlyInput(yearlyGoalTarget.toString());
+                          setIsEditingYearly(true);
+                        }}
+                        className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                      >
+                        <Edit3 size={13} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                    <span className="text-xl font-black text-gray-800">{yearlyBooksRead}</span>
+                    <span className="text-xs text-gray-400">/</span>
+                    {isEditingYearly ? (
+                      <form onSubmit={(e) => {
+                        e.preventDefault();
+                        const val = parseInt(tempYearlyInput, 10);
+                        if (!isNaN(val) && val > 0) {
+                          setYearlyGoalTarget(val);
+                          setIsEditingYearly(false);
+                        }
+                      }} className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min="1"
+                          value={tempYearlyInput}
+                          onChange={(e) => setTempYearlyInput(e.target.value)}
+                          className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-lg px-2 py-0.5 w-14 outline-none focus:ring-2 focus:ring-indigo-500"
+                          autoFocus
+                        />
+                        <button type="submit" className="bg-indigo-600 text-white rounded-lg p-0.5 hover:bg-indigo-700 transition">
+                          <Check size={12} />
+                        </button>
+                        <button type="button" onClick={() => setIsEditingYearly(false)} className="bg-gray-100 text-gray-500 rounded-lg p-0.5 hover:bg-gray-200 transition">
+                          <X size={12} />
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <span className="text-xl font-black text-indigo-600">{yearlyGoalTarget}</span>
+                        <span className="text-xs font-bold text-gray-400">{getLabel('books', currentLanguage)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Progress bar and Percentage to the right */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-1 bg-gray-50 rounded-full overflow-hidden border border-gray-100/30">
+                  <div
+                    className="h-full bg-indigo-600 rounded-full transition-all duration-1000 ease-out"
+                    style={{ width: `${Math.min(100, (yearlyBooksRead / yearlyGoalTarget) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-xs font-black text-gray-800 shrink-0 min-w-[2rem] text-right">
+                  {Math.min(100, Math.round((yearlyBooksRead / yearlyGoalTarget) * 100))}%
+                </span>
+              </div>
+              <p className="text-[9px] text-gray-400 font-semibold">{getLabel('yearlyGoalDesc', currentLanguage)}</p>
+            </div>
           </div>
-        </MetricSection>
-      </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -72,7 +72,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
     seasons: normalizeSeasons(initialValue.seasons),
     completedAt: initialValue.completedAt,
     rating: initialValue.rating,
-    addedAt: initialValue.addedAt,
+    addedAt: initialValue.addedAt || ((initialValue.status || allowedStatuses[0] || 'Unread') !== 'Wishlist' ? new Date().toISOString() : ''),
     wishlistedAt: initialValue.wishlistedAt,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -530,6 +530,8 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                   const val = e.target.value as BookStatus;
                   if (val !== 'Wishlist' && !form.addedAt) {
                     setForm((prev) => ({ ...prev, status: val, addedAt: new Date().toISOString() }));
+                  } else if (val === 'Wishlist') {
+                    setForm((prev) => ({ ...prev, status: val, addedAt: '' }));
                   } else {
                     updateForm('status', val);
                   }

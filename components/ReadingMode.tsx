@@ -32,8 +32,7 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
   const { toast, confirm } = useUI();
   const { t } = useI18n();
   const [diarySessions, setDiarySessions] = useState<ReadingSessionData[]>(() => {
-    const currentCycle = book.currentCycleIndex || 0;
-    return (book.sessions || []).filter(s => (s.cycleIndex || 0) === currentCycle);
+    return book.sessions || [];
   });
 
   const [session, setSession] = useState<ReadingSessionState>(() => {
@@ -65,9 +64,8 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
 
   useEffect(() => {
-    const currentCycle = book.currentCycleIndex || 0;
-    setDiarySessions((book.sessions || []).filter(s => (s.cycleIndex || 0) === currentCycle));
-  }, [book.id, book.sessions, book.currentCycleIndex]);
+    setDiarySessions(book.sessions || []);
+  }, [book.id, book.sessions]);
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -254,8 +252,8 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
     };
 
     const nextSessions = [...(book.sessions || []), newSession];
-    // Optimistic UI for filtered sessions
-    setDiarySessions(nextSessions.filter(s => (s.cycleIndex || 0) === currentCycle));
+    // Optimistic UI for all sessions
+    setDiarySessions(nextSessions);
 
     const currentSessions = nextSessions.filter(s => (s.cycleIndex || 0) === currentCycle);
     const totalRead = currentSessions.reduce((acc, s) => acc + (s.pages || 0), 0);
@@ -297,7 +295,7 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
     };
     
     const nextSessions = [...(book.sessions || []), newSession];
-    setDiarySessions(nextSessions.filter(s => (s.cycleIndex || 0) === currentCycle));
+    setDiarySessions(nextSessions);
     setEditingSessionId(newSession.id);
     
     updateBook({ ...book, sessions: nextSessions });
@@ -306,7 +304,7 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
   const updateSession = (sessionId: string, field: keyof ReadingSessionData, value: any) => {
     const updatedSessions = (book.sessions || []).map(s => s.id === sessionId ? { ...s, [field]: value } : s);
     const currentCycle = book.currentCycleIndex || 0;
-    setDiarySessions(updatedSessions.filter(s => (s.cycleIndex || 0) === currentCycle));
+    setDiarySessions(updatedSessions);
 
     const currentSessions = updatedSessions.filter(s => (s.cycleIndex || 0) === currentCycle);
     const totalRead = currentSessions.reduce((acc, s) => acc + (s.pages || 0), 0);
@@ -342,7 +340,7 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
     
     const updatedSessions = (book.sessions || []).filter(s => s.id !== sessionToDelete);
     const currentCycle = book.currentCycleIndex || 0;
-    setDiarySessions(updatedSessions.filter(s => (s.cycleIndex || 0) === currentCycle));
+    setDiarySessions(updatedSessions);
     
     const currentSessions = updatedSessions.filter(s => (s.cycleIndex || 0) === currentCycle);
     const totalRead = currentSessions.reduce((acc, s) => acc + (s.pages || 0), 0);
@@ -477,40 +475,58 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
           </div>
           <div className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-2.5">
               {diarySessions.length > 0 ? (
-                  [...diarySessions].reverse().map((s) => {
-                      const speed = (s.duration > 0 && book.selectedReadingFormat !== 'Audio') ? Math.round(s.pages / (s.duration / 3600)) : 0;
-                      const isEditing = editingSessionId === s.id;
-                      return (
-                          <div key={s.id} className="bg-white border border-gray-100 rounded-2xl p-2 shadow-sm flex items-stretch gap-2">
-                              <div className="flex-1 grid grid-cols-4 gap-2">
-                                  <div className="flex flex-col items-center justify-center bg-gray-50 rounded-xl p-1.5 min-w-0">
-                                      <div className="flex items-center gap-1 mb-0.5"><Calendar size={10} className="text-gray-400" /><span className="text-[9px] text-gray-400 uppercase font-bold truncate">Дата</span></div>
-                                      {isEditing ? (<input type="date" className="w-full bg-white text-[10px] rounded border border-gray-200 p-0.5" value={s.date} onChange={(e) => updateSession(s.id, 'date', e.target.value)} />) : (<span className="text-xs font-bold text-gray-700 truncate">{new Date(s.date).toLocaleDateString('uk-UA', {day: '2-digit', month: '2-digit'})}</span>)}
+                  (() => {
+                      const reversedSessions = [...diarySessions].reverse();
+                      return reversedSessions.map((s, idx) => {
+                          const speed = (s.duration > 0 && book.selectedReadingFormat !== 'Audio') ? Math.round(s.pages / (s.duration / 3600)) : 0;
+                          const isEditing = editingSessionId === s.id;
+                          
+                          const nextSession = reversedSessions[idx + 1];
+                          const showDividerAfter = nextSession && (s.cycleIndex || 0) !== (nextSession.cycleIndex || 0);
+
+                          return (
+                              <React.Fragment key={s.id}>
+                                  <div className="bg-white border border-gray-100 rounded-2xl p-2 shadow-sm flex items-stretch gap-2">
+                                      <div className="flex-1 grid grid-cols-4 gap-2">
+                                          <div className="flex flex-col items-center justify-center bg-gray-50 rounded-xl p-1.5 min-w-0">
+                                              <div className="flex items-center gap-1 mb-0.5"><Calendar size={10} className="text-gray-400" /><span className="text-[9px] text-gray-400 uppercase font-bold truncate">Дата</span></div>
+                                              {isEditing ? (<input type="date" className="w-full bg-white text-[10px] rounded border border-gray-200 p-0.5" value={s.date} onChange={(e) => updateSession(s.id, 'date', e.target.value)} />) : (<span className="text-xs font-bold text-gray-700 truncate">{new Date(s.date).toLocaleDateString('uk-UA', {day: '2-digit', month: '2-digit'})}</span>)}
+                                          </div>
+                                          <div className="flex flex-col items-center justify-center bg-gray-50 rounded-xl p-1.5 min-w-0">
+                                              <div className="flex items-center gap-1 mb-0.5"><FileText size={10} className="text-gray-400" /><span className="text-[9px] text-gray-400 uppercase font-bold truncate">{book.selectedReadingFormat === 'Audio' ? 'Відс' : 'Стор'}</span></div>
+                                              {isEditing ? (<input inputMode="numeric" pattern="[0-9]*" type="number" className="w-full text-center bg-white text-xs rounded border border-gray-200 p-0.5" value={s.pages === 0 ? '' : s.pages} placeholder="0" onChange={(e) => updateSession(s.id, 'pages', parseInt(e.target.value) || 0)} />) : (<span className="text-xs font-black text-indigo-600">{s.pages}{book.selectedReadingFormat === 'Audio' ? '%' : ''}</span>)}
+                                          </div>
+                                          <div className="flex flex-col items-center justify-center bg-gray-50 rounded-xl p-1.5 min-w-0">
+                                              <div className="flex items-center gap-1 mb-0.5"><Clock size={10} className="text-gray-400" /><span className="text-[9px] text-gray-400 uppercase font-bold truncate">Хв</span></div>
+                                              {isEditing ? (<input inputMode="numeric" pattern="[0-9]*" type="number" className="w-full text-center bg-white text-xs rounded border border-gray-200 p-0.5" value={Math.round(s.duration / 60) === 0 ? '' : Math.round(s.duration / 60)} placeholder="0" onChange={(e) => updateSession(s.id, 'duration', (parseInt(e.target.value) || 0) * 60)} />) : (<span className="text-xs font-black text-gray-700">{Math.round(s.duration / 60)}</span>)}
+                                          </div>
+                                          {book.selectedReadingFormat !== 'Audio' ? (
+                                            <DiaryCardItem icon={Zap} label="Швидк" value={`${speed}`} colorClass="text-amber-500" />
+                                          ) : (
+                                            <div className="flex flex-col items-center justify-center bg-gray-50 rounded-xl p-1.5 flex-1 min-w-0">
+                                              <div className="flex items-center gap-1 mb-0.5"><Zap size={10} className="text-gray-400" /><span className="text-[9px] text-gray-400 uppercase font-bold truncate">Аудіо</span></div>
+                                              <span className="text-xs font-black text-gray-400 italic">N/A</span>
+                                            </div>
+                                          )}
+                                      </div>
+                                      <div className="flex flex-col gap-1 w-8 flex-shrink-0">
+                                          <button onClick={(e) => { e.stopPropagation(); setEditingSessionId(isEditing ? null : s.id); }} className={`flex-1 flex-row items-center justify-center rounded-lg transition-colors ${isEditing ? 'bg-indigo-600 text-white shadow-md' : 'bg-gray-50 text-gray-400 hover:text-indigo-600'}`}>{isEditing ? <Save size={14} className="mx-auto" /> : <Edit3 size={14} className="mx-auto" />}</button>
+                                          <button onClick={(e) => deleteSession(e, s.id)} className="flex-1 flex items-center justify-center bg-red-50 text-red-400 hover:text-red-600 hover:bg-red-100 rounded-lg transition-colors"><Trash2 size={14} /></button>
+                                      </div>
                                   </div>
-                                  <div className="flex flex-col items-center justify-center bg-gray-50 rounded-xl p-1.5 min-w-0">
-                                      <div className="flex items-center gap-1 mb-0.5"><FileText size={10} className="text-gray-400" /><span className="text-[9px] text-gray-400 uppercase font-bold truncate">{book.selectedReadingFormat === 'Audio' ? 'Відс' : 'Стор'}</span></div>
-                                      {isEditing ? (<input inputMode="numeric" pattern="[0-9]*" type="number" className="w-full text-center bg-white text-xs rounded border border-gray-200 p-0.5" value={s.pages === 0 ? '' : s.pages} placeholder="0" onChange={(e) => updateSession(s.id, 'pages', parseInt(e.target.value) || 0)} />) : (<span className="text-xs font-black text-indigo-600">{s.pages}{book.selectedReadingFormat === 'Audio' ? '%' : ''}</span>)}
-                                  </div>
-                                  <div className="flex flex-col items-center justify-center bg-gray-50 rounded-xl p-1.5 min-w-0">
-                                      <div className="flex items-center gap-1 mb-0.5"><Clock size={10} className="text-gray-400" /><span className="text-[9px] text-gray-400 uppercase font-bold truncate">Хв</span></div>
-                                      {isEditing ? (<input inputMode="numeric" pattern="[0-9]*" type="number" className="w-full text-center bg-white text-xs rounded border border-gray-200 p-0.5" value={Math.round(s.duration / 60) === 0 ? '' : Math.round(s.duration / 60)} placeholder="0" onChange={(e) => updateSession(s.id, 'duration', (parseInt(e.target.value) || 0) * 60)} />) : (<span className="text-xs font-black text-gray-700">{Math.round(s.duration / 60)}</span>)}
-                                  </div>
-                                  {book.selectedReadingFormat !== 'Audio' ? (
-                                    <DiaryCardItem icon={Zap} label="Швидк" value={`${speed}`} colorClass="text-amber-500" />
-                                  ) : (
-                                    <div className="flex flex-col items-center justify-center bg-gray-50 rounded-xl p-1.5 flex-1 min-w-0">
-                                      <div className="flex items-center gap-1 mb-0.5"><Zap size={10} className="text-gray-400" /><span className="text-[9px] text-gray-400 uppercase font-bold truncate">Аудіо</span></div>
-                                      <span className="text-xs font-black text-gray-400 italic">N/A</span>
-                                    </div>
+                                  {showDividerAfter && (
+                                      <div className="my-4 flex items-center gap-3 px-2 py-1 select-none">
+                                          <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-gray-200" />
+                                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 px-2.5 py-1 rounded-full border border-gray-150">
+                                              {t('reading.previousCycles' as any)}
+                                          </span>
+                                          <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-gray-200" />
+                                      </div>
                                   )}
-                              </div>
-                              <div className="flex flex-col gap-1 w-8 flex-shrink-0">
-                                  <button onClick={(e) => { e.stopPropagation(); setEditingSessionId(isEditing ? null : s.id); }} className={`flex-1 flex items-center justify-center rounded-lg transition-colors ${isEditing ? 'bg-indigo-600 text-white shadow-md' : 'bg-gray-50 text-gray-400 hover:text-indigo-600'}`}>{isEditing ? <Save size={14} /> : <Edit3 size={14} />}</button>
-                                  <button onClick={(e) => deleteSession(e, s.id)} className="flex-1 flex items-center justify-center bg-red-50 text-red-400 hover:text-red-600 hover:bg-red-100 rounded-lg transition-colors"><Trash2 size={14} /></button>
-                              </div>
-                          </div>
-                      );
-                  })
+                              </React.Fragment>
+                          );
+                      });
+                  })()
               ) : (<div className="flex flex-col items-center justify-center py-10 text-gray-300 gap-2"><Clock size={32} opacity={0.2} /><p className="text-xs font-medium">Історія читання порожня</p></div>)}
           </div>
        </div>

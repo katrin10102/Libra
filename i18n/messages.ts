@@ -256,6 +256,8 @@ const en = {
   'reading.reReadTitle': 'Re-read book?',
   'reading.reReadMessage': 'Do you want to re-read this book?',
   'reading.reReadStarted': 'Re-reading started!',
+  'reading.previousCycles': 'Previous reading',
+  'reading.currentCycle': 'Current reading',
 } as const;
 
 const uk: Record<keyof typeof en, string> = {
@@ -514,6 +516,8 @@ const uk: Record<keyof typeof en, string> = {
   'reading.reReadTitle': 'Перечитати книгу?',
   'reading.reReadMessage': 'Чи хочете перечитати книгу?',
   'reading.reReadStarted': 'Перечитування розпочато!',
+  'reading.previousCycles': 'Попередні читання',
+  'reading.currentCycle': 'Поточне читання',
 };
 
 export const MESSAGES: Record<AppLanguage, Record<keyof typeof en, string>> = { en, uk };

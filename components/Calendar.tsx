@@ -254,10 +254,10 @@ export const Calendar: React.FC = () => {
                         </div>
                       </div>
                     )}
-                    <span className={`text-[10px] absolute top-1 left-1 font-bold z-20 transition-all ${
+                    <span className={`absolute top-1 left-1 font-extrabold z-20 transition-all ${
                         reads.length > 0 
-                            ? 'bg-white/95 text-gray-900 shadow px-1.5 py-0.5 rounded-lg border border-gray-100' 
-                            : 'text-gray-500'
+                            ? 'text-[9px] bg-black/40 backdrop-blur-md text-white shadow-sm px-1 py-[1px] rounded-md' 
+                            : 'text-[10px] text-gray-500'
                     }`}>
                       {day}
                     </span>

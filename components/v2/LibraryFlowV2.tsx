@@ -88,6 +88,9 @@ export const LibraryFlowV2: React.FC<LibraryFlowV2Props> = ({ onNavigateToReadin
       if (prev.kind === 'list' && (nextRoute.kind !== 'list' || prev.tab !== nextRoute.tab)) {
         globalScrollPositions[prev.tab] = window.scrollY;
       }
+      if (prev.tab !== nextRoute.tab) {
+        globalScrollPositions[nextRoute.tab] = 0;
+      }
       return nextRoute;
     });
   }, []);
@@ -101,11 +104,21 @@ export const LibraryFlowV2: React.FC<LibraryFlowV2Props> = ({ onNavigateToReadin
         }, 10);
       } else {
         window.scrollTo(0, 0);
+        document.documentElement.scrollTo(0, 0);
+        document.body.scrollTo(0, 0);
       }
     } else {
       window.scrollTo(0, 0);
+      document.documentElement.scrollTo(0, 0);
+      document.body.scrollTo(0, 0);
     }
-  }, [route]);
+  }, [route.kind, route.tab]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' as any });
+    document.documentElement.scrollTo({ top: 0, behavior: 'instant' as any });
+    document.body.scrollTo({ top: 0, behavior: 'instant' as any });
+  }, [route.tab]);
 
   // Also save scroll position when the component unmounts (e.g. switching main app views)
   const currentRouteRef = useRef(route);
@@ -114,6 +127,9 @@ export const LibraryFlowV2: React.FC<LibraryFlowV2Props> = ({ onNavigateToReadin
   }, [route]);
 
   useEffect(() => {
+    globalScrollPositions.library = 0;
+    globalScrollPositions.wishlist = 0;
+
     return () => {
       if (currentRouteRef.current.kind === 'list') {
         globalScrollPositions[currentRouteRef.current.tab] = window.scrollY;

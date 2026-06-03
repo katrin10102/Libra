@@ -37,6 +37,9 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     setIsNavHidden(false);
+    window.scrollTo({ top: 0, behavior: 'instant' as any });
+    document.documentElement.scrollTo({ top: 0, behavior: 'instant' as any });
+    document.body.scrollTo({ top: 0, behavior: 'instant' as any });
   }, [activeView]);
 
   const handleSettingsChange = useCallback((nextSettings: AppSettings) => {

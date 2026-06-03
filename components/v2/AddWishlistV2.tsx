@@ -18,8 +18,25 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
   const [title, setTitle] = React.useState('');
   const [author, setAuthor] = React.useState('');
   const [coverUrl, setCoverUrl] = React.useState('');
+  const [coverBlob, setCoverBlob] = React.useState<Blob | undefined>(undefined);
+  const [blobPreviewUrl, setBlobPreviewUrl] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isMagicLoading, setIsMagicLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    let objectUrl: string | null = null;
+    if (coverBlob) {
+      objectUrl = URL.createObjectURL(coverBlob);
+      setBlobPreviewUrl(objectUrl);
+    } else {
+      setBlobPreviewUrl(null);
+    }
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [coverBlob]);
+
   const previewBook = React.useMemo<Book>(
     () => ({
       id: '__wishlist_preview__',
@@ -33,13 +50,31 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
       seriesPart: '',
       pagesTotal: 0,
       pagesRead: 0,
-      coverUrl: coverUrl.trim(),
+      coverUrl: coverUrl.trim() || blobPreviewUrl || '',
       wishlistedAt: new Date().toISOString(),
       addedAt: '',
       sessions: [],
     }),
-    [author, coverUrl, t, title]
+    [author, coverUrl, blobPreviewUrl, t, title]
   );
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setCoverBlob(file);
+      setCoverUrl(''); // Clear URL if we have a blob
+      toast.show(t('bookForm.toast.coverFound'), 'success');
+    } catch (error) {
+      console.error('File upload failed', error);
+      toast.show(t('bookForm.toast.coverSearchError'), 'error');
+    }
+  };
+
+  const triggerFileUpload = () => {
+    fileInputRef.current?.click();
+  };
 
   const handleMagicSearch = async () => {
     const titleValue = title.trim();
@@ -53,6 +88,7 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
       const url = await fetchBookCover(titleValue, authorValue);
       if (url) {
         setCoverUrl(url);
+        setCoverBlob(undefined);
         toast.show(t('bookForm.toast.coverFound'), 'success');
       } else {
         toast.show(t('bookForm.toast.coverNotFound'), 'info');
@@ -97,6 +133,7 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
                 pagesTotal: 0,
                 pagesRead: 0,
                 coverUrl: coverUrl.trim(),
+                coverBlob,
                 wishlistedAt: nowIso,
                 addedAt: '',
                 sessions: [],
@@ -108,8 +145,19 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
         >
           <div className="flex justify-center">
             <div className="relative w-24">
-              <div className="w-24 aspect-[2/3] bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-                {coverUrl.trim() ? (
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="image/*"
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={triggerFileUpload}
+                className="w-24 aspect-[2/3] bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden shadow-sm relative group"
+              >
+                {(coverUrl.trim() || blobPreviewUrl) ? (
                   <BookCover book={previewBook} className="w-full h-full" iconSize={20} />
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-gray-300">
@@ -117,7 +165,12 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
                     <span className="text-[9px] font-bold uppercase tracking-wide">{t('bookForm.cover')}</span>
                   </div>
                 )}
-              </div>
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center">
+                  <div className="bg-white/90 backdrop-blur-sm p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ImageIcon size={14} className="text-gray-600" />
+                  </div>
+                </div>
+              </button>
               <button
                 type="button"
                 onClick={handleMagicSearch}
@@ -158,8 +211,11 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
             <input
               maxLength={1024}
               className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-xs font-medium"
-              value={coverUrl}
-              onChange={(e) => setCoverUrl(e.target.value)}
+              value={coverUrl || (coverBlob ? blobPreviewUrl || '' : '')}
+              onChange={(e) => {
+                setCoverUrl(e.target.value);
+                setCoverBlob(undefined);
+              }}
               placeholder={t('bookForm.coverUrlPlaceholder')}
             />
           </div>

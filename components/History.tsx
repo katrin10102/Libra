@@ -311,6 +311,12 @@ export const History: React.FC = () => {
     localStorage.setItem('history_selected_month', selectedMonthDate.toISOString());
   }, [selectedMonthDate]);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' as any });
+    document.documentElement.scrollTo({ top: 0, behavior: 'instant' as any });
+    document.body.scrollTo({ top: 0, behavior: 'instant' as any });
+  }, [currentSubTab]);
+
   const stats = useMemo(() => {
     let start: Date;
     let end: Date;
@@ -841,23 +847,24 @@ export const History: React.FC = () => {
                         const val = parseInt(tempDailyInput, 10);
                         if (!isNaN(val) && val > 0) {
                           setDailyGoalTarget(val);
-                          setIsEditingDaily(false);
                         }
-                      }} className="flex items-center gap-1.5">
+                        setIsEditingDaily(false);
+                      }} className="flex items-center">
                         <input
                           type="number"
                           min="1"
                           value={tempDailyInput}
                           onChange={(e) => setTempDailyInput(e.target.value)}
-                          className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-lg px-2 py-0.5 w-14 outline-none focus:ring-2 focus:ring-indigo-500"
+                          onBlur={() => {
+                            const val = parseInt(tempDailyInput, 10);
+                            if (!isNaN(val) && val > 0) {
+                              setDailyGoalTarget(val);
+                            }
+                            setIsEditingDaily(false);
+                          }}
+                          className="bg-white border-2 border-indigo-500 text-indigo-600 text-sm font-black rounded-xl px-2.5 py-1 w-20 outline-none focus:ring-2 focus:ring-indigo-500/20 text-center"
                           autoFocus
                         />
-                        <button type="submit" className="bg-indigo-600 text-white rounded-lg p-0.5 hover:bg-indigo-700 transition">
-                          <Check size={12} />
-                        </button>
-                        <button type="button" onClick={() => setIsEditingDaily(false)} className="bg-gray-100 text-gray-500 rounded-lg p-0.5 hover:bg-gray-200 transition">
-                          <X size={12} />
-                        </button>
                       </form>
                     ) : (
                       <div className="flex items-center gap-1">
@@ -915,23 +922,24 @@ export const History: React.FC = () => {
                         const val = parseInt(tempMonthlyInput, 10);
                         if (!isNaN(val) && val > 0) {
                           setMonthlyGoalTarget(val);
-                          setIsEditingMonthly(false);
                         }
-                      }} className="flex items-center gap-1.5">
+                        setIsEditingMonthly(false);
+                      }} className="flex items-center">
                         <input
                           type="number"
                           min="1"
                           value={tempMonthlyInput}
                           onChange={(e) => setTempMonthlyInput(e.target.value)}
-                          className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-lg px-2 py-0.5 w-14 outline-none focus:ring-2 focus:ring-indigo-500"
+                          onBlur={() => {
+                            const val = parseInt(tempMonthlyInput, 10);
+                            if (!isNaN(val) && val > 0) {
+                              setMonthlyGoalTarget(val);
+                            }
+                            setIsEditingMonthly(false);
+                          }}
+                          className="bg-white border-2 border-indigo-500 text-indigo-600 text-sm font-black rounded-xl px-2.5 py-1 w-20 outline-none focus:ring-2 focus:ring-indigo-500/20 text-center"
                           autoFocus
                         />
-                        <button type="submit" className="bg-indigo-600 text-white rounded-lg p-0.5 hover:bg-indigo-700 transition">
-                          <Check size={12} />
-                        </button>
-                        <button type="button" onClick={() => setIsEditingMonthly(false)} className="bg-gray-100 text-gray-500 rounded-lg p-0.5 hover:bg-gray-200 transition">
-                          <X size={12} />
-                        </button>
                       </form>
                     ) : (
                       <div className="flex items-center gap-1">
@@ -989,23 +997,24 @@ export const History: React.FC = () => {
                         const val = parseInt(tempYearlyInput, 10);
                         if (!isNaN(val) && val > 0) {
                           setYearlyGoalTarget(val);
-                          setIsEditingYearly(false);
                         }
-                      }} className="flex items-center gap-1.5">
+                        setIsEditingYearly(false);
+                      }} className="flex items-center">
                         <input
                           type="number"
                           min="1"
                           value={tempYearlyInput}
                           onChange={(e) => setTempYearlyInput(e.target.value)}
-                          className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-lg px-2 py-0.5 w-14 outline-none focus:ring-2 focus:ring-indigo-500"
+                          onBlur={() => {
+                            const val = parseInt(tempYearlyInput, 10);
+                            if (!isNaN(val) && val > 0) {
+                              setYearlyGoalTarget(val);
+                            }
+                            setIsEditingYearly(false);
+                          }}
+                          className="bg-white border-2 border-indigo-500 text-indigo-600 text-sm font-black rounded-xl px-2.5 py-1 w-20 outline-none focus:ring-2 focus:ring-indigo-500/20 text-center"
                           autoFocus
                         />
-                        <button type="submit" className="bg-indigo-600 text-white rounded-lg p-0.5 hover:bg-indigo-700 transition">
-                          <Check size={12} />
-                        </button>
-                        <button type="button" onClick={() => setIsEditingYearly(false)} className="bg-gray-100 text-gray-500 rounded-lg p-0.5 hover:bg-gray-200 transition">
-                          <X size={12} />
-                        </button>
                       </form>
                     ) : (
                       <div className="flex items-center gap-1">

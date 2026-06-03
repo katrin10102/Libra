@@ -51,6 +51,7 @@ export const AddBookV2: React.FC<AddBookV2Props> = ({
           series: value.series || '',
           seriesPart: value.seriesPart || '',
           coverUrl: value.coverUrl || '',
+          coverBlob: value.coverBlob,
           pagesTotal,
           pagesRead: isCompleted ? pagesTotal : 0,
           notes: value.notes || '',

@@ -35,6 +35,9 @@ class LibraDexieDb extends Dexie {
       covers: 'bookId,updatedAt',
       meta: 'key,updatedAt',
     });
+    this.version(3).stores({
+      books: 'id,status,customOrder,addedAt,updatedAt,publisher,genre,[status+customOrder],isbn,title,timestamp',
+    });
   }
 }
 

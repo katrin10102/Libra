@@ -42,6 +42,7 @@ export interface Book {
   readingPagesTotal?: number; // Specific page count for the selected format (e.g. e-book pages differ from paper)
 
   addedAt: string;
+  timestamp?: string;
   wishlistedAt?: string;
   readingStartedAt?: string;
   completedAt?: string;

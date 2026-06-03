@@ -141,9 +141,11 @@ export const History: React.FC = () => {
   const { books } = useLibrary();
   const { t, locale } = useI18n();
 
-  const [currentSubTab, setCurrentSubTab] = useState<'stats' | 'goals'>(() => {
-    return (localStorage.getItem('history_sub_tab') as 'stats' | 'goals') || 'stats';
-  });
+  const [currentSubTab, setCurrentSubTab] = useState<'stats' | 'goals'>('stats');
+
+  useEffect(() => {
+    setCurrentSubTab('stats');
+  }, []);
 
   const [dailyGoalTarget, setDailyGoalTarget] = useState<number>(() => {
     const val = localStorage.getItem('goals_daily_pages');
@@ -168,10 +170,6 @@ export const History: React.FC = () => {
 
   const [isEditingYearly, setIsEditingYearly] = useState(false);
   const [tempYearlyInput, setTempYearlyInput] = useState('');
-
-  useEffect(() => {
-    localStorage.setItem('history_sub_tab', currentSubTab);
-  }, [currentSubTab]);
 
   useEffect(() => {
     localStorage.setItem('goals_daily_pages', dailyGoalTarget.toString());

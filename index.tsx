@@ -3,8 +3,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-// Fix for iOS Safari to prevent scrolling while dragging issues (handled by dnd-kit mainly, but good safety)
-window.addEventListener( 'touchmove', function() {}, {passive: false});
+// Fix for iOS Safari to prevent scrolling while dragging issues is handled by dnd-kit mainly and normal standard viewport rules
+
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

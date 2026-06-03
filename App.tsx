@@ -37,9 +37,7 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     setIsNavHidden(false);
-    window.scrollTo({ top: 0, behavior: 'instant' as any });
-    document.documentElement.scrollTo({ top: 0, behavior: 'instant' as any });
-    document.body.scrollTo({ top: 0, behavior: 'instant' as any });
+    window.scrollTo(0, 0);
   }, [activeView]);
 
   const handleSettingsChange = useCallback((nextSettings: AppSettings) => {
@@ -116,18 +114,9 @@ const AppContent: React.FC = () => {
 };
 
 const NavButton: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({ active, onClick, icon, label }) => {
-  const lastTapTsRef = React.useRef(0);
-  const trigger = React.useCallback(() => {
-    const now = Date.now();
-    if (now - lastTapTsRef.current < 300) return;
-    lastTapTsRef.current = now;
-    onClick();
-  }, [onClick]);
-
   return (
     <button
-      onClick={trigger}
-      onTouchEnd={trigger}
+      onClick={onClick}
       className={`flex flex-col items-center justify-center p-2 rounded-2xl transition-all w-full ${
         active ? 'text-indigo-600 scale-110 font-medium' : 'text-gray-400 hover:bg-gray-50/50'
       }`}

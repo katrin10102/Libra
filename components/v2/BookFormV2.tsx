@@ -374,16 +374,16 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
           {
             fps: 15,
             qrbox: (width, height) => {
+              const size = Math.min(width, height);
               return {
-                width: Math.min(width * 0.9, 320),
-                height: Math.min(height * 0.5, 140)
+                width: Math.min(size * 0.85, 280),
+                height: Math.min(size * 0.35, 100)
               };
             },
-            aspectRatio: 1.777778,
+            aspectRatio: 1.0,
             videoConstraints: {
-              width: { min: 640, ideal: 1280, max: 1920 },
-              height: { min: 480, ideal: 720, max: 1080 },
-              facingMode: "environment"
+              facingMode: "environment",
+              aspectRatio: 1.0
             }
           },
           (decodedText) => {
@@ -587,7 +587,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                     </form>
                   ) : (
                     <div className="space-y-4">
-                      <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black border border-gray-100 flex items-center justify-center">
+                      <div className="relative aspect-square max-h-[320px] mx-auto w-full rounded-2xl overflow-hidden bg-black border border-gray-100 flex items-center justify-center">
                         <div id="bookform-scanner-reader" className="absolute inset-0 w-full h-full" />
                         
                         {activeMode === 'scan' && !scanError && (

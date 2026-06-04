@@ -106,11 +106,7 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
           verbose: false
         });
         html5QrCode.start(
-          { 
-            facingMode: "environment",
-            width: { min: 640, ideal: 1280, max: 1920 },
-            height: { min: 480, ideal: 720, max: 1080 }
-          },
+          { facingMode: "environment" },
           {
             fps: 15,
             qrbox: (width, height) => {
@@ -120,6 +116,11 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
               };
             },
             aspectRatio: 1.777778,
+            videoConstraints: {
+              width: { min: 640, ideal: 1280, max: 1920 },
+              height: { min: 480, ideal: 720, max: 1080 },
+              facingMode: "environment"
+            }
           },
           (decodedText) => {
             if (navigator.vibrate) {

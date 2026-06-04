@@ -1,11 +1,12 @@
 import React from 'react';
-import { Image as ImageIcon, Loader2, Wand2 } from 'lucide-react';
+import { ArrowLeft, Barcode, Image as ImageIcon, Loader2, Wand2 } from 'lucide-react';
 import { Book } from '../../types';
 import { createClientId } from '../../services/id';
 import { BookCover } from '../ui/BookCover';
 import { useI18n } from '../../contexts/I18nContext';
 import { fetchBookCover } from '../../services/storageService';
 import { useUI } from '../../contexts/UIContext';
+import { parserInstance } from '../../services/MBooksParser';
 
 interface AddWishlistV2Props {
   onAdd: (book: Book) => void;
@@ -23,6 +24,64 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isMagicLoading, setIsMagicLoading] = React.useState(false);
+
+  const [isbn, setIsbn] = React.useState('');
+  const [publisher, setPublisher] = React.useState('');
+  const [pagesTotal, setPagesTotal] = React.useState(0);
+  const [series, setSeries] = React.useState('');
+  const [seriesPart, setSeriesPart] = React.useState('');
+  const [timestamp, setTimestamp] = React.useState<string | undefined>(undefined);
+
+  const [showIsbnModal, setShowIsbnModal] = React.useState(false);
+  const [isbnInput, setIsbnInput] = React.useState('');
+  const [isbnStep, setIsbnStep] = React.useState<number | null>(null);
+
+  const handleIsbnSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanIsbn = isbnInput.replace(/[-\s]/g, '');
+    if (!cleanIsbn) {
+      toast.show('ISBN is required', 'info');
+      return;
+    }
+
+    setIsbnStep(1); // Крок 1: Пошук посилання
+    try {
+      const href = await parserInstance.searchByIsbn(cleanIsbn);
+      if (!href) {
+        toast.show(t('bookForm.isbnLookupError'), 'error');
+        setIsbnStep(null);
+        return;
+      }
+
+      setIsbnStep(2); // Крок 2: Отримання деталей
+      const parsedBook = await parserInstance.getBookDetails(href);
+      if (!parsedBook) {
+        toast.show(t('bookForm.isbnLookupError'), 'error');
+        setIsbnStep(null);
+        return;
+      }
+
+      // Success! Populate the form with parsed values
+      setTitle(parsedBook.title || title);
+      setAuthor(parsedBook.author || parsedBook.authorSeries || author || '-');
+      setPublisher(parsedBook.publisher || publisher || '');
+      setPagesTotal(parsedBook.pages || pagesTotal || 0);
+      setSeries(parsedBook.authorSeries || series || '');
+      setSeriesPart(parsedBook.orderInSeries || seriesPart || '');
+      setCoverUrl(parsedBook.coverImage || coverUrl || '');
+      setIsbn(parsedBook.isbn || cleanIsbn);
+      setTimestamp(new Date().toISOString());
+
+      toast.show(t('bookForm.isbnLookupSuccess'), 'success');
+      setShowIsbnModal(false);
+      setIsbnInput('');
+    } catch (err) {
+      console.error('ISBN lookup failed:', err);
+      toast.show(t('bookForm.isbnLookupError'), 'error');
+    } finally {
+      setIsbnStep(null);
+    }
+  };
 
   React.useEffect(() => {
     let objectUrl: string | null = null;
@@ -45,17 +104,19 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
       formats: ['Paper'],
       status: 'Wishlist',
       genre: '',
-      publisher: '',
-      series: '',
-      seriesPart: '',
-      pagesTotal: 0,
+      publisher: publisher.trim(),
+      series: series.trim(),
+      seriesPart: seriesPart.trim(),
+      pagesTotal: Number(pagesTotal) || 0,
       pagesRead: 0,
       coverUrl: coverUrl.trim() || blobPreviewUrl || '',
       wishlistedAt: new Date().toISOString(),
       addedAt: '',
       sessions: [],
+      isbn: isbn.trim(),
+      timestamp: timestamp,
     }),
-    [author, coverUrl, blobPreviewUrl, t, title]
+    [author, coverUrl, blobPreviewUrl, t, title, publisher, series, seriesPart, pagesTotal, isbn, timestamp]
   );
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -104,15 +165,92 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
   return (
     <div className="h-[100dvh] overflow-y-auto overscroll-contain p-4 pb-8 text-gray-800">
       <button onClick={onCancel} className="flex items-center gap-2 text-gray-400 hover:text-gray-600 transition-colors">
+        <ArrowLeft size={20} />
         <span className="text-sm font-bold">{t('common.back')}</span>
       </button>
 
       <div className="mt-4 bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-        <h1 className="text-2xl font-bold text-gray-800">{t('bookForm.addWishlistTitle')}</h1>
-        <p className="text-xs text-gray-500 mt-1">{t('bookForm.addWishlistSubtitle')}</p>
+        <header className="mb-6">
+          <div className="flex justify-between items-center gap-4">
+            <h1 className="text-2xl font-bold text-gray-800">{t('bookForm.addWishlistTitle')}</h1>
+            <button
+              type="button"
+              onClick={() => setShowIsbnModal(true)}
+              className="flex flex-col items-center justify-center p-2 px-3 rounded-2xl border border-gray-100 bg-gray-50/50 hover:bg-indigo-50/30 text-indigo-600 transition-all active:scale-95 shadow-sm hover:border-indigo-100"
+            >
+              <Barcode size={24} />
+              <span className="text-[9px] font-bold uppercase tracking-wider mt-1 text-gray-500 whitespace-nowrap">
+                {t('bookForm.addByIsbn')}
+              </span>
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">{t('bookForm.addWishlistSubtitle')}</p>
+        </header>
+
+        {showIsbnModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+            <div className="bg-white rounded-[2rem] w-full max-w-sm p-6 shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200 text-left">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <Barcode size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">{t('bookForm.isbnLookup')}</h3>
+                  <p className="text-xs text-gray-400 font-medium">mbooks.com.ua</p>
+                </div>
+              </div>
+
+              {isbnStep !== null ? (
+                <div className="py-8 flex flex-col items-center justify-center gap-4">
+                  <Loader2 className="animate-spin text-indigo-600" size={36} />
+                  <div className="text-center">
+                    <p className="text-sm font-bold text-gray-800">
+                      {isbnStep === 1 ? t('bookForm.isbnLookupStep1') : t('bookForm.isbnLookupStep2')}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1 font-medium">{t('app.loading')}</p>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleIsbnSearch} className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">ISBN / {t('bookForm.isbn')}</label>
+                    <input
+                      required
+                      autoFocus
+                      type="text"
+                      placeholder="978-..."
+                      className="w-full bg-gray-50 p-3.5 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-sm font-bold placeholder-gray-400/70"
+                      value={isbnInput}
+                      onChange={(e) => setIsbnInput(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowIsbnModal(false);
+                        setIsbnInput('');
+                      }}
+                      className="flex-1 bg-gray-50 text-gray-500 font-bold py-3 px-4 rounded-xl border border-gray-100 hover:bg-gray-100 active:scale-95 transition-all text-sm"
+                    >
+                      {t('bookForm.isbnLookupCancel')}
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 bg-indigo-600 text-white font-bold py-3 px-4 rounded-xl shadow-md hover:bg-indigo-700 active:scale-95 transition-all text-sm"
+                    >
+                      {t('bookForm.isbnLookupSearch')}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
 
         <form
-          className="mt-6 space-y-4"
+          className="space-y-4"
           onSubmit={(e) => {
             e.preventDefault();
             if (isSubmitting) return;
@@ -127,16 +265,18 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
                 formats: ['Paper'],
                 status: 'Wishlist',
                 genre: '',
-                publisher: '',
-                series: '',
-                seriesPart: '',
-                pagesTotal: 0,
+                publisher: publisher.trim(),
+                series: series.trim(),
+                seriesPart: seriesPart.trim(),
+                pagesTotal: Number(pagesTotal) || 0,
                 pagesRead: 0,
                 coverUrl: coverUrl.trim(),
                 coverBlob,
                 wishlistedAt: nowIso,
                 addedAt: '',
                 sessions: [],
+                isbn: isbn.trim(),
+                timestamp: timestamp || new Date().toISOString(),
               });
             } finally {
               setIsSubmitting(false);
@@ -203,6 +343,17 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
               className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-sm font-bold"
               value={author}
               onChange={(e) => setAuthor(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{t('bookForm.isbn') || 'ISBN'}</label>
+            <input
+              maxLength={40}
+              className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-xs font-bold"
+              value={isbn}
+              onChange={(e) => setIsbn(e.target.value)}
+              placeholder="ISBN / Штрихкод"
             />
           </div>
 

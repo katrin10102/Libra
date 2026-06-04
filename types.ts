@@ -44,6 +44,7 @@ export interface Book {
   addedAt: string;
   timestamp?: string;
   wishlistedAt?: string;
+  soldAt?: string;
   readingStartedAt?: string;
   completedAt?: string;
   completedDates?: string[];

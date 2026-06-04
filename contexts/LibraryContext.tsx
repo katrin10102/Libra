@@ -102,6 +102,9 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const addBook = useCallback((book: Book) => {
     setState((prev) => {
       const orderedBook = { ...book, customOrder: prev.books.length };
+      if (orderedBook.formats.includes('Sold') && !orderedBook.soldAt) {
+        orderedBook.soldAt = new Date().toISOString();
+      }
       try {
         scheduleBookSave(orderedBook);
       } catch (error) {
@@ -118,6 +121,15 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // If moving to Reading state and no start date exists, set it.
     if (finalBook.status === 'Reading' && (!finalBook.readingStartedAt)) {
          finalBook.readingStartedAt = new Date().toISOString();
+    }
+
+    // Logic for tracking Sold format date
+    if (finalBook.formats.includes('Sold')) {
+      if (!finalBook.soldAt) {
+        finalBook.soldAt = new Date().toISOString();
+      }
+    } else {
+      finalBook.soldAt = undefined;
     }
 
     // 2. Logic for RESETTING (False starts or moving back to shelf)

@@ -57,12 +57,10 @@ const getLabel = (key: string, lang: string) => {
 };
 
 const formatCompletedDate = (date: Date, locale: string) => {
-  const lang = locale === 'uk' ? 'uk-UA' : 'en-US';
-  return new Intl.DateTimeFormat(lang, {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
-  }).format(date);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
 };
 
 interface MetricSectionProps {
@@ -387,6 +385,21 @@ export const History: React.FC = () => {
       })
       .sort((a, b) => new Date(b.addedAt!).getTime() - new Date(a.addedAt!).getTime());
 
+    // Sold books
+    const soldBooks = books
+      .filter(b => b.formats.includes('Sold'))
+      .filter(b => {
+        const saleDateStr = b.soldAt || b.updatedAt || b.timestamp || b.addedAt;
+        if (!saleDateStr) return false;
+        const d = new Date(saleDateStr);
+        return d >= start && d <= end;
+      })
+      .sort((a, b) => {
+        const dateA = a.soldAt || a.updatedAt || a.timestamp || a.addedAt || '';
+        const dateB = b.soldAt || b.updatedAt || b.timestamp || b.addedAt || '';
+        return new Date(dateB).getTime() - new Date(dateA).getTime();
+      });
+
     // 5. Genres distribution
     const genreMap: Record<string, number> = {};
     completedBooks.forEach(b => {
@@ -440,6 +453,7 @@ export const History: React.FC = () => {
       worstBooks,
       countRating10,
       addedBooks,
+      soldBooks,
       genres,
       publishers,
       totalPagesRead,
@@ -742,6 +756,37 @@ export const History: React.FC = () => {
                   }
                 />
               ))}
+            </MetricSection>
+
+            {/* 5b. Sold Books */}
+            <MetricSection
+              title={t('stats.soldBooksCount')}
+              value={stats.soldBooks.length}
+              icon={<Tags size={24} />}
+              isOpen={openSection === 'sold'}
+              onToggle={() => toggleSection('sold')}
+              hasData={stats.soldBooks.length > 0}
+              emptyMessage={t('stats.noSold')}
+            >
+              {stats.soldBooks.map((book) => {
+                const saleDateStr = book.soldAt || book.updatedAt || book.timestamp || book.addedAt || '';
+                return (
+                  <BookItem 
+                    key={book.id} 
+                    book={book} 
+                    locale={locale} 
+                    t={t} 
+                    extraInfo={
+                      <div className="text-right flex-shrink-0 pl-2 border-l border-gray-50">
+                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mb-1">{t('stats.soldAt')}</p>
+                        <p className="text-xs font-black text-indigo-600">
+                          {saleDateStr ? formatCompletedDate(new Date(saleDateStr), locale) : '-'}
+                        </p>
+                      </div>
+                    }
+                  />
+                );
+              })}
             </MetricSection>
 
             {/* 6. Genres */}

@@ -307,17 +307,9 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
       return;
     }
 
-    setIsbnStep(1); // Крок 1: Пошук посилання
+    setIsbnStep(1); // Крок 1: Пошук книги
     try {
-      const href = await parserInstance.searchByIsbn(cleanIsbn);
-      if (!href) {
-        toast.show(t('bookForm.isbnLookupError'), 'error');
-        setIsbnStep(null);
-        return;
-      }
-
-      setIsbnStep(2); // Крок 2: Отримання деталей
-      const parsedBook = await parserInstance.getBookDetails(href);
+      const parsedBook = await parserInstance.searchBookUnified(cleanIsbn);
       if (!parsedBook) {
         toast.show(t('bookForm.isbnLookupError'), 'error');
         setIsbnStep(null);

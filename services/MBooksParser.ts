@@ -242,6 +242,56 @@ export class MBooksParser {
       return null;
     }
   }
+
+  /**
+   * Robust search sequence: mbooks.com.ua -> Google Books API -> Open Library API
+   */
+  async searchBookUnified(isbn: string): Promise<ParsedBook | null> {
+    const cleanIsbn = isbn.replace(/[-\s]/g, '');
+    if (!cleanIsbn) return null;
+
+    // 1. Try mbooks.com.ua (Vite proxy in dev or Capacitor in mobile apps)
+    try {
+      console.log('Trying mbooks.com.ua lookup...');
+      const href = await this.searchByIsbn(cleanIsbn);
+      if (href) {
+        const details = await this.getBookDetails(href);
+        // Ensure we got a valid book title, and not a false parse from a fallback index.html response
+        if (details && details.title && details.title !== 'Невідома назва' && !details.title.includes('<!DOCTYPE') && !details.title.includes('<html')) {
+          console.log('Successfully found book on mbooks.com.ua!');
+          return details;
+        }
+      }
+    } catch (e) {
+      console.warn('mbooks.com.ua lookup failed or not available, trying fallbacks:', e);
+    }
+
+    // 2. Try Google Books API
+    try {
+      console.log('Trying Google Books API fallback...');
+      const gBook = await this.searchGoogleBooks(cleanIsbn);
+      if (gBook) {
+        console.log('Successfully found book on Google Books!');
+        return gBook;
+      }
+    } catch (e) {
+      console.warn('Google Books fallback failed:', e);
+    }
+
+    // 3. Try Open Library API
+    try {
+      console.log('Trying Open Library API fallback...');
+      const olBook = await this.searchOpenLibrary(cleanIsbn);
+      if (olBook) {
+        console.log('Successfully found book on Open Library!');
+        return olBook;
+      }
+    } catch (e) {
+      console.warn('Open Library fallback failed:', e);
+    }
+
+    return null;
+  }
 }
 
 const fetchHtml = async (url: string): Promise<string> => {

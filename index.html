@@ -126,6 +126,33 @@
 }
 </script>
 <link rel="stylesheet" href="/index.css">
+    <script>
+      // Register Service Worker
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js')
+            .then((reg) => console.log('ServiceWorker registered with scope: ', reg.scope))
+            .catch((err) => console.error('ServiceWorker registration failed: ', err));
+        });
+      }
+
+      window.deferredPrompt = null;
+      
+      window.addEventListener('beforeinstallprompt', (e) => {
+        // Prevent Chrome from automatically showing the prompt
+        e.preventDefault();
+        // Stash the event so it can be triggered later
+        window.deferredPrompt = e;
+        // Notify React components that the install button can be shown
+        window.dispatchEvent(new Event('pwa-install-available'));
+      });
+
+      window.addEventListener('appinstalled', () => {
+        window.deferredPrompt = null;
+        window.dispatchEvent(new Event('pwa-installed'));
+        console.log('PWA was successfully installed');
+      });
+    </script>
 </head>
 <body>
     <div id="root"></div>

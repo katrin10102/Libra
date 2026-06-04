@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Bug, CheckCircle2, Copy, Download, FileSpreadsheet, Heart, Loader2, Palette, ShieldCheck, Trash2, Upload, X } from 'lucide-react';
+import { Bug, CheckCircle2, Copy, Download, DownloadCloud, FileSpreadsheet, Heart, Loader2, Palette, ShieldCheck, Trash2, Upload, X } from 'lucide-react';
 import { useI18n } from '../contexts/I18nContext';
 import { useLibrary } from '../contexts/LibraryContext';
 import { useUI } from '../contexts/UIContext';
@@ -23,6 +23,63 @@ export const Settings: React.FC<SettingsProps> = ({ onSettingsChange }) => {
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [settings, setSettings] = useState<AppSettings>({ accent: 'indigo', bg: 'cool', language: 'en' });
+
+  const [canInstall, setCanInstall] = useState(false);
+  const [isAppInstalled, setIsAppInstalled] = useState(false);
+
+  useEffect(() => {
+    // Check if running as PWA (standalone)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    if (isStandalone) {
+      setIsAppInstalled(true);
+    }
+
+    if ((window as any).deferredPrompt) {
+      setCanInstall(true);
+    }
+
+    const handleInstallAvailable = () => setCanInstall(true);
+    const handleInstalled = () => {
+      setCanInstall(false);
+      setIsAppInstalled(true);
+      toast.show(settings.language === 'en' ? 'Application installed successfully!' : 'Додаток успішно встановлено!', 'success');
+    };
+
+    window.addEventListener('pwa-install-available', handleInstallAvailable);
+    window.addEventListener('pwa-installed', handleInstalled);
+
+    return () => {
+      window.removeEventListener('pwa-install-available', handleInstallAvailable);
+      window.removeEventListener('pwa-installed', handleInstalled);
+    };
+  }, [settings.language]);
+
+  const handlePwaInstall = async () => {
+    const promptEvent = (window as any).deferredPrompt;
+    
+    if (promptEvent) {
+      promptEvent.prompt();
+      const { outcome } = await promptEvent.userChoice;
+      console.log(`User prompt decision: ${outcome}`);
+      (window as any).deferredPrompt = null;
+      setCanInstall(false);
+    } else {
+      const isiOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+      if (isiOS) {
+        alert(
+          settings.language === 'en'
+            ? "To install on iOS:\n1. Tap the Share button (arrow pointing up at Safari toolbar).\n2. Scroll down and tap 'Add to Home Screen'."
+            : "Для встановлення на iOS:\n1. Натисніть кнопку 'Поділитися' (іконка стрілки вгору в Safari).\n2. Оберіть пункт 'Додати на початковий екран'."
+        );
+      } else {
+        alert(
+          settings.language === 'en'
+            ? "To install on Android / Chrome:\n1. Open other menu (three dots in top right corner of Chrome).\n2. Select 'Install app' or 'Add to Home screen'."
+            : "Для встановлення на Android / Chrome:\n1. Натисніть на три крапки в правому верхньому кутку меню Chrome.\n2. Оберіть пункт 'Встановити додаток' або 'Додати на головний екран'."
+        );
+      }
+    }
+  };
 
   useEffect(() => {
     setSettings(loadSettings());
@@ -247,6 +304,29 @@ export const Settings: React.FC<SettingsProps> = ({ onSettingsChange }) => {
           <Heart size={18} />
           <span>{t('settings.thankAuthor')}</span>
         </a>
+      </div>
+
+      <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-gray-100 space-y-6">
+        <div className="flex items-center gap-3">
+           <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-sm">
+              <DownloadCloud size={20} />
+           </div>
+           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t('settings.pwa.installTitle')}</h3>
+        </div>
+        <p className="text-sm text-gray-500 leading-relaxed">{t('settings.pwa.installSubtitle')}</p>
+
+        <button
+          onClick={handlePwaInstall}
+          disabled={isAppInstalled}
+          className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg ${
+            isAppInstalled 
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none border border-gray-200' 
+              : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
+          }`}
+        >
+          <DownloadCloud size={18} />
+          <span>{isAppInstalled ? t('settings.pwa.installed') : t('settings.pwa.installBtn')}</span>
+        </button>
       </div>
 
       <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-gray-100 space-y-6">

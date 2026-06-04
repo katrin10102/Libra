@@ -236,6 +236,10 @@ const en = {
   'settings.localStorageDesc': 'All data and covers are stored in your browser.',
   'settings.versionDesc': 'Your reading companion',
   'settings.thankAuthor': 'Thank the author',
+  'settings.pwa.installTitle': 'Install application',
+  'settings.pwa.installSubtitle': 'Install Libra on your device for fast access and standalone offline use.',
+  'settings.pwa.installBtn': 'Install App',
+  'settings.pwa.installed': 'Application installed',
 
   'settings.toast.uiV2On': 'UI V2 beta enabled',
   'settings.toast.uiV2Off': 'UI V2 beta disabled',
@@ -514,6 +518,10 @@ const uk: Record<keyof typeof en, string> = {
   'settings.localStorageDesc': 'Усі дані та обкладинки зберігаються у вашому браузері.',
   'settings.versionDesc': 'Ваш помічник для читання',
   'settings.thankAuthor': 'Подякувати автору',
+  'settings.pwa.installTitle': 'Встановити додаток',
+  'settings.pwa.installSubtitle': 'Встановіть Libra як окремий додаток на робочий стіл для швидкого доступу та зручної роботи офлайн.',
+  'settings.pwa.installBtn': 'Встановити додаток',
+  'settings.pwa.installed': 'Додаток вже встановлено',
 
   'settings.toast.uiV2On': 'UI V2 beta увімкнено',
   'settings.toast.uiV2Off': 'UI V2 beta вимкнено',

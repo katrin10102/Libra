@@ -244,50 +244,50 @@ export class MBooksParser {
   }
 
   /**
-   * Robust search sequence: mbooks.com.ua -> Google Books API -> Open Library API
+   * Unified search method that tries mbooks.com.ua, and if that fails or returns nothing,
+   * falls back to Google Books API, and then to Open Library API.
+   * Also reports which stage it is currently executing via an optional onStep change handler.
    */
-  async searchBookUnified(isbn: string): Promise<ParsedBook | null> {
+  async searchWithFallback(
+    isbn: string,
+    onStep?: (step: number) => void
+  ): Promise<ParsedBook | null> {
     const cleanIsbn = isbn.replace(/[-\s]/g, '');
-    if (!cleanIsbn) return null;
-
-    // 1. Try mbooks.com.ua (Vite proxy in dev or Capacitor in mobile apps)
+    
+    // Stage 1: Try MBooks parser
+    if (onStep) onStep(1); // Stage 1: Search book link on MBooks
     try {
-      console.log('Trying mbooks.com.ua lookup...');
       const href = await this.searchByIsbn(cleanIsbn);
       if (href) {
-        const details = await this.getBookDetails(href);
-        // Ensure we got a valid book title, and not a false parse from a fallback index.html response
-        if (details && details.title && details.title !== 'Невідома назва' && !details.title.includes('<!DOCTYPE') && !details.title.includes('<html')) {
-          console.log('Successfully found book on mbooks.com.ua!');
-          return details;
+        if (onStep) onStep(2); // Stage 2: Retrieve details from MBooks
+        const book = await this.getBookDetails(href);
+        if (book && book.title && book.title !== 'Невідома назва') {
+          return book;
         }
       }
     } catch (e) {
-      console.warn('mbooks.com.ua lookup failed or not available, trying fallbacks:', e);
+      console.warn('MBooks search failed, falling back to Google Books...', e);
     }
 
-    // 2. Try Google Books API
+    // Stage 2 fallback: Try Google Books API
+    if (onStep) onStep(2); // Treat as stage 2 (fetching details)
     try {
-      console.log('Trying Google Books API fallback...');
       const gBook = await this.searchGoogleBooks(cleanIsbn);
-      if (gBook) {
-        console.log('Successfully found book on Google Books!');
+      if (gBook && gBook.title && gBook.title !== 'Невідома назва') {
         return gBook;
       }
     } catch (e) {
-      console.warn('Google Books fallback failed:', e);
+      console.warn('Google Books failed, falling back to Open Library...', e);
     }
 
-    // 3. Try Open Library API
+    // Stage 3 fallback: Try Open Library API
     try {
-      console.log('Trying Open Library API fallback...');
       const olBook = await this.searchOpenLibrary(cleanIsbn);
-      if (olBook) {
-        console.log('Successfully found book on Open Library!');
+      if (olBook && olBook.title && olBook.title !== 'Невідома назва') {
         return olBook;
       }
     } catch (e) {
-      console.warn('Open Library fallback failed:', e);
+      console.error('Open Library search failed:', e);
     }
 
     return null;

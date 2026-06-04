@@ -46,9 +46,12 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
       return;
     }
 
-    setIsbnStep(1); // Крок 1: Пошук книги
+    setIsbnStep(1); // Крок 1: Пошук посилання
     try {
-      const parsedBook = await parserInstance.searchBookUnified(cleanIsbn);
+      const parsedBook = await parserInstance.searchWithFallback(cleanIsbn, (step) => {
+        setIsbnStep(step);
+      });
+
       if (!parsedBook) {
         toast.show(t('bookForm.isbnLookupError'), 'error');
         setIsbnStep(null);

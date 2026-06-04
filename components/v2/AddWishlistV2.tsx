@@ -109,17 +109,17 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
           { facingMode: "environment" },
           {
             fps: 15,
-            qrbox: (width, height) => {
+            qrbox: (w, h) => {
+              const width = w || 640;
+              const height = h || 480;
               const size = Math.min(width, height);
               return {
                 width: Math.min(size * 0.85, 280),
                 height: Math.min(size * 0.35, 100)
               };
             },
-            aspectRatio: 1.0,
             videoConstraints: {
-              facingMode: "environment",
-              aspectRatio: 1.0
+              facingMode: "environment"
             }
           },
           (decodedText) => {

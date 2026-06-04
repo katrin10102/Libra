@@ -8,7 +8,7 @@ import { MessageKey } from '../../i18n/messages';
 import { fetchBookCover } from '../../services/storageService';
 import { useUI } from '../../contexts/UIContext';
 import { parserInstance } from '../../services/MBooksParser';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
 interface BookFormV2Props {
   title: string;
@@ -358,15 +358,29 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
 
     const timer = setTimeout(() => {
       try {
-        html5QrCode = new Html5Qrcode(elementId);
+        html5QrCode = new Html5Qrcode(elementId, {
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39
+          ],
+          verbose: false
+        });
         html5QrCode.start(
-          { facingMode: "environment" },
+          { 
+            facingMode: "environment",
+            width: { min: 640, ideal: 1280, max: 1920 },
+            height: { min: 480, ideal: 720, max: 1080 }
+          },
           {
-            fps: 10,
+            fps: 15,
             qrbox: (width, height) => {
               return {
-                width: Math.min(width * 0.85, 280),
-                height: Math.min(height * 0.45, 120)
+                width: Math.min(width * 0.9, 320),
+                height: Math.min(height * 0.5, 140)
               };
             },
             aspectRatio: 1.777778,

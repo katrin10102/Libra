@@ -304,8 +304,23 @@ const fetchHtml = async (url: string): Promise<string> => {
     }
     return JSON.stringify(response.data);
   } else {
-    // Локальний браузер через проксі Vite
-    const response = await fetch(url);
+    let finalUrl = url;
+    
+    // Check if we are running in non-local production (like GitHub Pages)
+    const isProductionStatic = typeof window !== 'undefined' && 
+      !window.location.hostname.includes('localhost') && 
+      !window.location.hostname.includes('127.0.0.1') && 
+      !window.location.hostname.includes('run.app');
+
+    if (url.startsWith('/api')) {
+      if (isProductionStatic) {
+        // На GitHub Pages немає бекенду, тому ми використовуємо CORS-проксі для зв'язку з mbooks
+        const targetUrl = `https://mbooks.com.ua${url.substring(4)}`;
+        finalUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+      }
+    }
+
+    const response = await fetch(finalUrl);
     if (!response.ok) throw new Error('Помилка мережі');
     return response.text();
   }

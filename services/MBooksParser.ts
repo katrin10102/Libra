@@ -2,6 +2,7 @@ import { Capacitor, CapacitorHttp } from '@capacitor/core';
 
 export interface ParsedBook {
   title: string;
+  author?: string;
   coverImage: string;
   authorSeries?: string;
   orderInSeries?: string;
@@ -9,7 +10,6 @@ export interface ParsedBook {
   publisher?: string;
   isbn: string;
   bookUrl: string;
-  author?: string;
 }
 
 export class MBooksParser {
@@ -20,17 +20,19 @@ export class MBooksParser {
   }
 
   /**
-   * Крок 1: Пошук книги за ISBN та повернення відносного шляху URL
+   * Stage 1: Search for the book by ISBN and return its relative URL path
    */
   async searchByIsbn(isbn: string): Promise<string | null> {
     const cleanIsbn = isbn.replace(/[-\s]/g, '');
     const url = `/api/search/?query=${encodeURIComponent(cleanIsbn)}`;
     const html = await this.fetchHtml(url);
-
+    
+    // Attempt DOM parser if available (e.g. in browser context)
     if (typeof DOMParser !== 'undefined') {
       try {
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
+        // Look for the product image link as requested
         const link = doc.querySelector('a.product-image, a[href*="/book/"]');
         if (link) {
           const href = link.getAttribute('href');
@@ -41,16 +43,19 @@ export class MBooksParser {
       }
     }
 
-    // Резервний варіант 1: Пошук посилання в HTML за допомогою regex
+    // Fallback 1: Regex matching simple link
     const hrefRegex = /<a[^>]+href="([^"]*\/book\/[^"]*)"[^>]*>/i;
     const hrefMatch = html.match(hrefRegex);
-    if (hrefMatch) return hrefMatch[1];
+    if (hrefMatch) {
+      return hrefMatch[1];
+    }
 
-    // Резервний варіант 2: Пошук збігів у JSON-стейті Next.js (__next_f)
+    // Fallback 2: Next.js script state slug matching
     const slugRegex = /\\?"slug\\?":\\?"([^"\\]+)\\?"/g;
     let match;
     while ((match = slugRegex.exec(html)) !== null) {
       const slug = match[1];
+      // Book slugs start with digits (e.g., 753864-numo-...)
       if (/^\d+-/.test(slug)) {
         return `/book/${slug}/`;
       }
@@ -60,7 +65,7 @@ export class MBooksParser {
   }
 
   /**
-   * Крок 2: Отримання детальних метаданих книги
+   * Stage 2: Fetch the book detail page and parse metadata
    */
   async getBookDetails(href: string): Promise<ParsedBook | null> {
     const cleanHref = href.startsWith('/') ? href : `/${href}`;
@@ -82,6 +87,7 @@ export class MBooksParser {
         result.title = titleMatch[1].split(' - ')[0].split(' | ')[0].replace(/^Книга\s+/i, '').trim();
       }
     }
+
     // 2. Author (from /authors/ link)
     const authorRegex = /<a[^>]+href="\/authors\/[^"]*"[^>]*>([\s\S]*?)<\/a>/gi;
     const authors: string[] = [];
@@ -95,11 +101,15 @@ export class MBooksParser {
     if (authors.length > 0) {
       result.author = authors.join(', ');
     }
-    // 3. Cover Image
-    const imageMatch = html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i);
-    if (imageMatch) result.coverImage = imageMatch[1];
 
-    // Парсинг характеристик по парах
+    // 3. Cover Image
+    const imageMatch = html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i) ||
+                       html.match(/<meta\s+name="twitter:image"\s+content="([^"]+)"/i);
+    if (imageMatch) {
+      result.coverImage = imageMatch[1];
+    }
+
+    // 3. Grid-based details parsing
     const pairRegex = /<span\s+[^>]*class="[^"]*opacity-70[^"]*"[^>]*>([^<]+)<\/span>\s*<\/div>\s*<div\s+[^>]*>\s*(?:<a\s+[^>]*>\s*)?<span\s+[^>]*>([\s\S]*?)<\/span>/gi;
     let matchPair;
     while ((matchPair = pairRegex.exec(html)) !== null) {
@@ -119,15 +129,118 @@ export class MBooksParser {
       }
     }
 
+    // Fallbacks
     if (!result.isbn) {
       const isbnMatch = html.match(/ISBN\s*([\d-]+)/i);
-      if (isbnMatch) result.isbn = isbnMatch[1].replace(/[-\s]/g, '');
+      if (isbnMatch) {
+        result.isbn = isbnMatch[1].replace(/[-\s]/g, '');
+      }
     }
 
-    if (!result.title) result.title = 'Невідома назва';
-    if (!result.coverImage) result.coverImage = '';
+    if (!result.title) {
+      result.title = 'Невідома назва';
+    }
+    if (!result.coverImage) {
+      result.coverImage = '';
+    }
 
     return result as ParsedBook;
+  }
+
+  /**
+   * Fallback Stage: Search in Google Books API by ISBN
+   */
+  async searchGoogleBooks(isbn: string): Promise<ParsedBook | null> {
+    const cleanIsbn = isbn.replace(/[-\s]/g, '');
+    const url = `https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanIsbn}`;
+    const jsonText = await this.fetchHtml(url);
+    
+    try {
+      const data = JSON.parse(jsonText);
+      if (!data.items || data.items.length === 0) return null;
+      
+      const volumeInfo = data.items[0].volumeInfo;
+      
+      // Extract ISBN
+      let parsedIsbn = cleanIsbn;
+      if (volumeInfo.industryIdentifiers) {
+        const idObj = volumeInfo.industryIdentifiers.find((id: any) => id.type === 'ISBN_13') || 
+                      volumeInfo.industryIdentifiers.find((id: any) => id.type === 'ISBN_10');
+        if (idObj) {
+          parsedIsbn = idObj.identifier;
+        }
+      }
+
+      // Extract high-quality cover if available
+      let cover = '';
+      if (volumeInfo.imageLinks) {
+        cover = volumeInfo.imageLinks.thumbnail || volumeInfo.imageLinks.smallThumbnail || '';
+        if (cover.startsWith('http:')) {
+          cover = cover.replace('http:', 'https:');
+        }
+      }
+
+      return {
+        title: volumeInfo.title || 'Невідома назва',
+        author: volumeInfo.authors ? volumeInfo.authors.join(', ') : 'Невідомий автор',
+        coverImage: cover,
+        pages: volumeInfo.pageCount || undefined,
+        publisher: volumeInfo.publisher || 'Google Books',
+        isbn: parsedIsbn,
+        bookUrl: volumeInfo.infoLink || `https://books.google.com/books?vid=ISBN${cleanIsbn}`,
+        authorSeries: '',
+        orderInSeries: ''
+      };
+    } catch (e) {
+      console.error('Failed to parse Google Books response:', e);
+      return null;
+    }
+  }
+
+  /**
+   * Fallback Stage 2: Search in Open Library API by ISBN
+   */
+  async searchOpenLibrary(isbn: string): Promise<ParsedBook | null> {
+    const cleanIsbn = isbn.replace(/[-\s]/g, '');
+    const url = `https://openlibrary.org/api/books?bibkeys=ISBN:${cleanIsbn}&format=json&jscmd=data`;
+    const jsonText = await this.fetchHtml(url);
+
+    try {
+      const data = JSON.parse(jsonText);
+      const bibKey = `ISBN:${cleanIsbn}`;
+      if (!data[bibKey]) return null;
+
+      const bookInfo = data[bibKey];
+      
+      const title = bookInfo.title || 'Невідома назва';
+      const author = bookInfo.authors ? bookInfo.authors.map((a: any) => a.name).join(', ') : 'Невідомий автор';
+      
+      let cover = '';
+      if (bookInfo.cover) {
+        cover = bookInfo.cover.large || bookInfo.cover.medium || bookInfo.cover.small || '';
+        if (cover.startsWith('http:')) {
+          cover = cover.replace('http:', 'https:');
+        }
+      }
+
+      const publisher = bookInfo.publishers ? bookInfo.publishers.map((p: any) => p.name).join(', ') : 'Open Library';
+      const pages = bookInfo.number_of_pages || undefined;
+
+      return {
+        title,
+        author,
+        coverImage: cover,
+        pages,
+        publisher,
+        isbn: cleanIsbn,
+        bookUrl: bookInfo.url || `https://openlibrary.org/isbn/${cleanIsbn}`,
+        authorSeries: '',
+        orderInSeries: ''
+      };
+    } catch (e) {
+      console.error('Failed to parse Open Library response:', e);
+      return null;
+    }
   }
 }
 
@@ -136,7 +249,6 @@ const fetchHtml = async (url: string): Promise<string> => {
     // Мобільний додаток (CapacitorHttp обходить CORS безпосередньо)
     const fullUrl = url.replace(/^\/api\//, 'https://mbooks.com.ua/');
     const response = await CapacitorHttp.get({ url: fullUrl });
-    // response.data could be string or object depending on content-type, coerce to string
     if (typeof response.data === 'string') {
       return response.data;
     }
@@ -150,3 +262,4 @@ const fetchHtml = async (url: string): Promise<string> => {
 };
 
 export const parserInstance = new MBooksParser(fetchHtml);
+

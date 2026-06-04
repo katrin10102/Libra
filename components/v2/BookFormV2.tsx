@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Barcode, Image as ImageIcon, Loader2, Save, Wand2 } from 'lucide-react';
+import { ArrowLeft, Barcode, Camera, Image as ImageIcon, Keyboard, Loader2, Save, Wand2 } from 'lucide-react';
 import { Book, BookFormat, BookStatus } from '../../types';
 import { FORMAT_LABELS, getSeasonColorClass, normalizeSeason, SEASON_OPTIONS } from '../../utils';
 import { BookCover } from '../ui/BookCover';
@@ -8,6 +8,7 @@ import { MessageKey } from '../../i18n/messages';
 import { fetchBookCover } from '../../services/storageService';
 import { useUI } from '../../contexts/UIContext';
 import { parserInstance } from '../../services/MBooksParser';
+import { Html5Qrcode } from 'html5-qrcode';
 
 interface BookFormV2Props {
   title: string;
@@ -87,6 +88,8 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
   const [showIsbnModal, setShowIsbnModal] = useState(false);
   const [isbnInput, setIsbnInput] = useState('');
   const [isbnStep, setIsbnStep] = useState<number | null>(null);
+  const [activeMode, setActiveMode] = useState<'manual' | 'scan'>('manual');
+  const [scanError, setScanError] = useState<string | null>(null);
 
   const publisherRef = useRef<HTMLDivElement>(null);
   const genreRef = useRef<HTMLDivElement>(null);
@@ -297,9 +300,8 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
     updateForm('seasons', [...current, normalized]);
   };
 
-  const handleIsbnSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanIsbn = isbnInput.replace(/[-\s]/g, '');
+  const triggerIsbnSearch = async (rawIsbn: string) => {
+    const cleanIsbn = rawIsbn.replace(/[-\s]/g, '');
     if (!cleanIsbn) {
       toast.show('ISBN is required', 'info');
       return;
@@ -346,6 +348,69 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
       setIsbnStep(null);
     }
   };
+
+  const handleIsbnSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    triggerIsbnSearch(isbnInput);
+  };
+
+  useEffect(() => {
+    if (!showIsbnModal || activeMode !== 'scan') return;
+
+    let html5QrCode: Html5Qrcode | null = null;
+    const elementId = "bookform-scanner-reader";
+    setScanError(null);
+
+    const timer = setTimeout(() => {
+      try {
+        html5QrCode = new Html5Qrcode(elementId);
+        html5QrCode.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: (width, height) => {
+              return {
+                width: Math.min(width * 0.85, 280),
+                height: Math.min(height * 0.45, 120)
+              };
+            },
+            aspectRatio: 1.777778,
+          },
+          (decodedText) => {
+            if (navigator.vibrate) {
+              navigator.vibrate(100);
+            }
+            toast.show(`${t('bookForm.isbnFound')}: ${decodedText}`, 'success');
+            setIsbnInput(decodedText);
+            setActiveMode('manual');
+            triggerIsbnSearch(decodedText);
+          },
+          (errorMessage) => {
+            // Uncritical scan stream callbacks
+          }
+        ).catch((err) => {
+          console.error("Scanner startup issue:", err);
+          setScanError(t('bookForm.isbnScanError'));
+        });
+      } catch (err) {
+        console.error("Scanner exception:", err);
+        setScanError(t('bookForm.isbnScanError'));
+      }
+    }, 150);
+
+    return () => {
+      clearTimeout(timer);
+      if (html5QrCode) {
+        if (html5QrCode.isScanning) {
+          html5QrCode.stop().then(() => {
+            html5QrCode?.clear();
+          }).catch((err) => {
+            console.error("Failed to stop scanner on clean up:", err);
+          });
+        }
+      }
+    };
+  }, [showIsbnModal, activeMode]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -412,6 +477,13 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
 
         {showIsbnModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+            <style>{`
+              @keyframes scanLaser {
+                0% { top: 15%; }
+                50% { top: 85%; }
+                100% { top: 15%; }
+              }
+            `}</style>
             <div className="bg-white rounded-[2rem] w-full max-w-sm p-6 shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200 text-left">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
@@ -434,39 +506,122 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                   </div>
                 </div>
               ) : (
-                <form onSubmit={handleIsbnSearch} className="space-y-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">ISBN / {t('bookForm.isbn')}</label>
-                    <input
-                      required
-                      autoFocus
-                      type="text"
-                      placeholder="978-..."
-                      className="w-full bg-gray-50 p-3.5 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-sm font-bold placeholder-gray-400/70"
-                      value={isbnInput}
-                      onChange={(e) => setIsbnInput(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="flex gap-3 pt-2">
+                <>
+                  <div className="grid grid-cols-2 gap-2 bg-gray-100 p-1 rounded-2xl mb-4">
                     <button
                       type="button"
                       onClick={() => {
-                        setShowIsbnModal(false);
-                        setIsbnInput('');
+                        setActiveMode('manual');
+                        setScanError(null);
                       }}
-                      className="flex-1 bg-gray-50 text-gray-500 font-bold py-3 px-4 rounded-xl border border-gray-100 hover:bg-gray-100 active:scale-95 transition-all text-sm"
+                      className={`flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                        activeMode === 'manual'
+                          ? 'bg-white text-indigo-600 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
                     >
-                      {t('bookForm.isbnLookupCancel')}
+                      <Keyboard size={16} />
+                      {t('bookForm.isbnManualMode')}
                     </button>
                     <button
-                      type="submit"
-                      className="flex-1 bg-indigo-600 text-white font-bold py-3 px-4 rounded-xl shadow-md hover:bg-indigo-700 active:scale-95 transition-all text-sm"
+                      type="button"
+                      onClick={() => {
+                        setActiveMode('scan');
+                        setScanError(null);
+                        setIsbnInput('');
+                      }}
+                      className={`flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                        activeMode === 'scan'
+                          ? 'bg-white text-indigo-600 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
                     >
-                      {t('bookForm.isbnLookupSearch')}
+                      <Camera size={16} />
+                      {t('bookForm.isbnScanMode')}
                     </button>
                   </div>
-                </form>
+
+                  {activeMode === 'manual' ? (
+                    <form onSubmit={handleIsbnSearch} className="space-y-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">ISBN / {t('bookForm.isbn')}</label>
+                        <input
+                          required
+                          autoFocus
+                          type="text"
+                          placeholder="978-..."
+                          className="w-full bg-gray-50 p-3.5 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-sm font-bold placeholder-gray-400/70"
+                          value={isbnInput}
+                          onChange={(e) => setIsbnInput(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowIsbnModal(false);
+                            setIsbnInput('');
+                          }}
+                          className="flex-1 bg-gray-50 text-gray-500 font-bold py-3 px-4 rounded-xl border border-gray-100 hover:bg-gray-100 active:scale-95 transition-all text-sm"
+                        >
+                          {t('bookForm.isbnLookupCancel')}
+                        </button>
+                        <button
+                          type="submit"
+                          className="flex-1 bg-indigo-600 text-white font-bold py-3 px-4 rounded-xl shadow-md hover:bg-indigo-700 active:scale-95 transition-all text-sm"
+                        >
+                          {t('bookForm.isbnLookupSearch')}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black border border-gray-100 flex items-center justify-center">
+                        <div id="bookform-scanner-reader" className="absolute inset-0 w-full h-full" />
+                        
+                        {activeMode === 'scan' && !scanError && (
+                          <div className="absolute inset-x-4 top-1/2 h-0.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] pointer-events-none z-10" 
+                               style={{ animation: 'scanLaser 2.5s linear infinite' }} />
+                        )}
+
+                        {scanError && (
+                          <div className="absolute inset-0 p-4 bg-gray-950/95 flex flex-col items-center justify-center text-center gap-2 z-20">
+                            <Camera size={32} className="text-red-400 animate-pulse" />
+                            <p className="text-xs font-bold text-red-150 px-4 leading-normal text-red-300">{scanError}</p>
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                setActiveMode('manual');
+                                setScanError(null);
+                              }}
+                              className="mt-2 text-xs font-bold text-white bg-indigo-600 px-3 py-1.5 rounded-xl hover:bg-indigo-700 active:scale-95 transition-all"
+                            >
+                              {t('bookForm.isbnManualMode')}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <p className="text-[11px] font-bold text-gray-400 text-center uppercase tracking-wide">
+                        {t('bookForm.isbnFound')}: {isbnInput || '...'}
+                      </p>
+
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowIsbnModal(false);
+                            setIsbnInput('');
+                          }}
+                          className="flex-1 bg-gray-50 text-gray-500 font-bold py-3 px-4 rounded-xl border border-gray-100 hover:bg-gray-100 active:scale-95 transition-all text-sm"
+                        >
+                          {t('bookForm.isbnLookupCancel')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

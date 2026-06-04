@@ -56,6 +56,7 @@ export const AddBookV2: React.FC<AddBookV2Props> = ({
           pagesRead: isCompleted ? pagesTotal : 0,
           notes: value.notes || '',
           comment: value.comment || '',
+          rating: value.rating,
           addedAt: status === 'Wishlist' ? '' : nowIso,
           wishlistedAt: status === 'Wishlist' ? nowIso : undefined,
           readingStartedAt: isReading || isCompleted ? nowIso : undefined,

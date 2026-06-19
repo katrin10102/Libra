@@ -380,7 +380,7 @@ const uk: Record<keyof typeof en, string> = {
   'bookForm.seasons': 'Сезон',
   'bookForm.formats': 'Формати',
   'bookForm.notes': 'Примітки',
-  'bookForm.notesPlaceholder': 'Тільки емодзі або короткі мітки',
+  'bookForm.notesPlaceholder': 'Тільки емодзі',
   'bookForm.comment': 'Коментар',
   'bookForm.addedAt': 'Дата придбання',
   'bookForm.addBookTitle': 'Додати книгу',

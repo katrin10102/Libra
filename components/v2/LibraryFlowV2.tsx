@@ -240,7 +240,10 @@ export const LibraryFlowV2: React.FC<LibraryFlowV2Props> = ({ onNavigateToReadin
       ]
         .join(' ')
         .toLowerCase();
-      return haystack.includes(q);
+      
+      const normalizedQ = q.replace(/\uFE0F/g, '');
+      const normalizedHaystack = haystack.replace(/\uFE0F/g, '');
+      return normalizedHaystack.includes(normalizedQ);
     });
   }, [currentTab, pagesFrom, pagesTo, search, selectedFormats, selectedStatuses, selectedSeason, sourceBooks]);
 

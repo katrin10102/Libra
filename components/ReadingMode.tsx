@@ -410,17 +410,17 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
     <div className="fixed inset-0 z-[100] bg-[#323238] flex flex-col animate-in fade-in duration-300">
        <div className="flex-none flex flex-col items-center px-4 pt-4 pb-2 w-full h-[55%] min-h-[300px]">
            <div className="w-full flex justify-end items-center mb-2">
-             <button onClick={onClose} className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors"><X size={20} /></button>
+             <button onClick={onClose} className="p-2 bg-[#ffffff]/10 rounded-full text-[#ffffff] hover:bg-[#ffffff]/20 transition-colors"><X size={20} /></button>
            </div>
            
            <div className="flex flex-col items-center justify-center flex-1 w-full gap-3">
                <div className="flex items-center gap-6 w-full max-w-sm justify-center">
                    <div className="w-20 h-28 rounded-lg overflow-hidden shadow-2xl relative flex-shrink-0 border border-white/10">
                       <BookCover book={book} className="w-full h-full" iconSize={32} />
-                      {book.selectedReadingFormat && (<div className="absolute top-1 right-1 bg-black/60 backdrop-blur rounded p-1 text-white">{getFormatIcon(book.selectedReadingFormat)}</div>)}
+                      {book.selectedReadingFormat && (<div className="absolute top-1 right-1 bg-black/60 backdrop-blur rounded p-1 text-[#ffffff]">{getFormatIcon(book.selectedReadingFormat)}</div>)}
                    </div>
                    <div className="flex flex-col justify-center">
-                       <div className="text-4xl font-bold text-white leading-none mb-2">{calculateProgress(book.pagesRead, effectiveTotal)}%</div>
+                       <div className="text-4xl font-bold text-[#ffffff] leading-none mb-2">{calculateProgress(book.pagesRead, effectiveTotal)}%</div>
                        <div className="text-sm font-medium text-gray-300 mb-1">
                          {book.selectedReadingFormat === 'Audio' 
                            ? `${book.pagesRead || 0}%` 
@@ -434,20 +434,20 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
                    </div>
                </div>
            </div>
-
+ 
            <div className="w-full flex justify-center pb-4">
               {!session.isActive ? (
                 <button 
                   onClick={book.status === 'Completed' ? handleReReadClick : handleStartRecordClick} 
                   className={`w-20 h-20 rounded-full border-[4px] border-white/10 flex items-center justify-center shadow-xl active:scale-95 transition-all ${book.status === 'Completed' ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-red-600 hover:bg-red-500'}`}
                 >
-                    {book.status === 'Completed' ? <RefreshCw size={28} className="text-white" /> : <div className="w-6 h-6 bg-white rounded-full" />} 
+                    {book.status === 'Completed' ? <RefreshCw size={28} className="text-[#ffffff]" /> : <div className="w-6 h-6 bg-[#ffffff] rounded-full" />} 
                 </button>
               ) : (
                 <div className="flex items-center gap-4 bg-black/30 p-2 rounded-[2.5rem] backdrop-blur-md border border-white/5">
-                    <button onClick={handlePauseToggle} className="w-14 h-14 rounded-full bg-amber-400 flex items-center justify-center text-white shadow-lg active:scale-95 transition-all">{session.isPaused ? <Play size={20} fill="currentColor" /> : <Pause size={20} fill="currentColor" />}</button>
-                    <div className="text-white font-mono text-2xl font-bold w-24 text-center tracking-wider">{formatTime(session.displaySeconds)}</div>
-                    <button onClick={handleStopRecordClick} className="w-14 h-14 rounded-full bg-red-600 flex items-center justify-center text-white shadow-lg active:scale-95 transition-all"><Square size={18} fill="currentColor" /></button>
+                    <button onClick={handlePauseToggle} className="w-14 h-14 rounded-full bg-amber-400 flex items-center justify-center text-[#ffffff] shadow-lg active:scale-95 transition-all">{session.isPaused ? <Play size={20} fill="currentColor" /> : <Pause size={20} fill="currentColor" />}</button>
+                    <div className="text-[#ffffff] font-mono text-2xl font-bold w-24 text-center tracking-wider">{formatTime(session.displaySeconds)}</div>
+                    <button onClick={handleStopRecordClick} className="w-14 h-14 rounded-full bg-red-600 flex items-center justify-center text-[#ffffff] shadow-lg active:scale-95 transition-all"><Square size={18} fill="currentColor" /></button>
                 </div>
               )}
            </div>
@@ -556,7 +556,7 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
                        <input inputMode="numeric" pattern="[0-9]*" type="number" className="w-full text-center text-4xl font-black text-gray-800 bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all" value={tempPagesTotal === 0 ? '' : tempPagesTotal} placeholder="0" onChange={(e) => setTempPagesTotal(parseInt(e.target.value) || 0)} />
                        <p className="text-center text-xs text-gray-400 mt-2">За замовчуванням: {book.pagesTotal}</p>
                    </div>
-                   <button onClick={handlePagesConfirm} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-indigo-200 active:scale-95 transition-all">Зберегти</button>
+                   <button onClick={handlePagesConfirm} className="w-full bg-indigo-600 text-[#ffffff] py-4 rounded-2xl font-bold text-lg shadow-xl shadow-indigo-200 active:scale-95 transition-all">Зберегти</button>
                </div>
            </div>
        )}
@@ -574,7 +574,7 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
                    <div /><button onClick={() => handleNumpadPress(0)} className="h-14 rounded-2xl text-xl font-bold text-gray-800 bg-gray-50 hover:bg-gray-100 active:bg-gray-200 transition-colors shadow-sm">0</button>
                    <button onClick={handleNumpadBackspace} className="h-14 rounded-2xl flex items-center justify-center text-gray-800 bg-gray-50 hover:bg-gray-100 active:bg-gray-200 transition-colors shadow-sm"><Delete size={20} /></button>
                </div>
-               <div className="flex gap-3"><button onClick={() => setNumpadMode(null)} className="flex-1 py-4 bg-gray-100 rounded-2xl font-bold text-gray-600 active:scale-95 transition-all">Скасувати</button><button onClick={handleNumpadConfirm} className="flex-[2] py-4 bg-black text-white rounded-2xl font-bold shadow-lg active:scale-95 transition-all">OK</button></div>
+               <div className="flex gap-3"><button onClick={() => setNumpadMode(null)} className="flex-1 py-4 bg-gray-100 rounded-2xl font-bold text-gray-600 active:scale-95 transition-all">Скасувати</button><button onClick={handleNumpadConfirm} className="flex-[2] py-4 bg-black text-[#ffffff] rounded-2xl font-bold shadow-lg active:scale-95 transition-all">OK</button></div>
             </div>
          </div>
        )}
@@ -583,8 +583,8 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
          <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-slate-900/90 backdrop-blur-xl">
             <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl flex flex-col items-center">
                <Trophy size={48} className="text-emerald-500 mb-4" /><h3 className="text-2xl font-bold mb-2">Вітаємо!</h3><p className="text-gray-500 text-sm mb-8 text-center">Книга прочитана. Як вам вона?</p>
-               <div className="grid grid-cols-5 gap-2 mb-10">{[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (<button key={n} onClick={() => setTempRating(n)} className={`w-12 h-12 rounded-2xl text-sm font-bold transition-all ${tempRating === n ? 'bg-indigo-600 text-white shadow-lg' : 'bg-gray-50 text-gray-400'}`}>{n}</button>))}</div>
-               <button onClick={submitRatingAndFinish} className="w-full bg-indigo-600 text-white py-5 rounded-[2rem] font-bold shadow-xl active:scale-95">Завершити</button>
+               <div className="grid grid-cols-5 gap-2 mb-10">{[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (<button key={n} onClick={() => setTempRating(n)} className={`w-12 h-12 rounded-2xl text-sm font-bold transition-all ${tempRating === n ? 'bg-indigo-600 text-[#ffffff] shadow-lg' : 'bg-gray-50 text-gray-400'}`}>{n}</button>))}</div>
+               <button onClick={submitRatingAndFinish} className="w-full bg-indigo-600 text-[#ffffff] py-5 rounded-[2rem] font-bold shadow-xl active:scale-95">Завершити</button>
             </div>
          </div>
        )}
@@ -607,7 +607,7 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
                     </button>
                     <button 
                         onClick={handleConfirmDelete} 
-                        className="flex-1 py-4 bg-red-500 text-white rounded-2xl font-bold shadow-lg shadow-red-200 hover:bg-red-600 active:scale-95 transition-all"
+                        className="flex-1 py-4 bg-red-500 text-[#ffffff] rounded-2xl font-bold shadow-lg shadow-red-200 hover:bg-red-600 active:scale-95 transition-all"
                     >
                         Видалити
                     </button>

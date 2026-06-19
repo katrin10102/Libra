@@ -685,7 +685,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                 <input
                   required
                   maxLength={180}
-                  className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-sm font-bold"
+                  className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border border-gray-200 text-sm font-bold"
                   value={form.title || ''}
                   onChange={(e) => updateForm('title', sanitizeText(e.target.value, 180))}
                   placeholder={t('bookForm.title')}
@@ -697,7 +697,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                 <input
                   required
                   maxLength={140}
-                  className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-sm font-bold"
+                  className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border border-gray-200 text-sm font-bold"
                   value={form.author || ''}
                   onChange={(e) => updateForm('author', sanitizeText(e.target.value, 140))}
                   placeholder={t('bookForm.author')}
@@ -710,7 +710,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
             <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{t('bookForm.coverUrl')}</label>
             <input
               maxLength={1024}
-              className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-xs font-medium"
+              className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border border-gray-200 text-xs font-medium"
               value={(form.coverUrl as string) || (form.coverBlob ? blobPreviewUrl || '' : '')}
               onChange={(e) => {
                 const nextUrl = sanitizeText(e.target.value, 1024);
@@ -728,7 +728,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
             <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{t('bookForm.isbn') || 'ISBN'}</label>
             <input
               maxLength={40}
-              className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-xs font-bold"
+              className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border border-gray-200 text-xs font-bold"
               value={form.isbn || ''}
               onChange={(e) => updateForm('isbn', sanitizeText(e.target.value, 40))}
               placeholder="ISBN / Штрихкод"
@@ -740,7 +740,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
               <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{t('bookForm.publisher')}</label>
               <input
                 maxLength={120}
-                className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-xs font-bold"
+                className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border border-gray-200 text-xs font-bold"
                 value={form.publisher || ''}
                 onChange={(e) => updateForm('publisher', sanitizeText(e.target.value, 120))}
                 onFocus={() => setPublisherFocused(true)}
@@ -771,7 +771,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
               <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{t('bookForm.genre')}</label>
               <input
                 maxLength={160}
-                className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-xs font-bold"
+                className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border border-gray-200 text-xs font-bold"
                 value={form.genre || ''}
                 onChange={(e) => updateForm('genre', sanitizeText(e.target.value, 160))}
                 onFocus={() => setGenreFocused(true)}
@@ -804,7 +804,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
               <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{t('bookForm.series')}</label>
               <input
                 maxLength={120}
-                className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-xs font-bold"
+                className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border border-gray-200 text-xs font-bold"
                 value={form.series || ''}
                 onChange={(e) => updateForm('series', sanitizeText(e.target.value, 120))}
               />
@@ -813,7 +813,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
               <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{t('bookForm.seriesPart')}</label>
               <input
                 maxLength={60}
-                className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-xs font-bold"
+                className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border border-gray-200 text-xs font-bold"
                 value={form.seriesPart || ''}
                 onChange={(e) => updateForm('seriesPart', sanitizeText(e.target.value, 60))}
               />
@@ -827,7 +827,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                 type="number"
                 inputMode="numeric"
                 min={0}
-                className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-xs font-bold"
+                className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border border-gray-200 text-xs font-bold"
                 value={form.pagesTotal === 0 ? '' : (form.pagesTotal || '')}
                 onChange={(e) => updateForm('pagesTotal', Math.max(0, Number(e.target.value) || 0))}
                 placeholder="0"
@@ -837,7 +837,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{t('bookForm.status')}</label>
               <select
-                className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-xs font-bold"
+                className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border border-gray-200 text-xs font-bold"
                 value={(form.status as BookStatus) || allowedStatuses[0]}
                 onChange={(e) => {
                   const val = e.target.value as BookStatus;
@@ -865,7 +865,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
               <input
                 type="date"
                 required
-                className="w-full block bg-gray-50 p-3 rounded-2xl text-xs font-bold border-none outline-none appearance-none min-w-0 box-border max-w-full"
+                className="w-full block bg-gray-50 p-3 rounded-2xl text-xs font-bold border border-gray-200 outline-none appearance-none min-w-0 box-border max-w-full"
                 value={form.addedAt ? form.addedAt.substring(0, 10) : ''}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -881,7 +881,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                 <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{t('details.completed')}</label>
                 <input
                   type="date"
-                  className="w-full block bg-gray-50 p-3 rounded-2xl text-xs font-bold border-none outline-none appearance-none min-w-0 box-border max-w-full"
+                  className="w-full block bg-gray-50 p-3 rounded-2xl text-xs font-bold border border-gray-200 outline-none appearance-none min-w-0 box-border max-w-full"
                   value={form.completedAt ? form.completedAt.substring(0, 10) : ''}
                   onChange={(e) => updateForm('completedAt', e.target.value ? new Date(e.target.value).toISOString() : undefined)}
                 />
@@ -889,7 +889,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{t('details.rating')}</label>
                 <select
-                  className="w-full bg-gray-50 p-3 rounded-2xl text-xs font-bold border-none outline-none appearance-none"
+                  className="w-full bg-gray-50 p-3 rounded-2xl text-xs font-bold border border-gray-200 outline-none appearance-none"
                   value={form.rating || 0}
                   onChange={(e) => updateForm('rating', parseInt(e.target.value))}
                 >
@@ -952,12 +952,12 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
             <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{t('bookForm.notes')}</label>
             <input
               maxLength={80}
-              className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-xs font-medium"
+              className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border border-gray-200 text-xs font-medium"
               value={form.notes || ''}
               onChange={(e) => {
                 const val = e.target.value;
                 try {
-                  const clean = val.replace(/[^\p{Extended_Pictographic}\s]/gu, '');
+                  const clean = val.replace(/[^\p{Extended_Pictographic}\p{Emoji_Component}\p{Emoji_Presentation}\p{Emoji_Modifier}\p{Emoji_Modifier_Base}\u{1F1E6}-\u{1F1FF}\u{200D}\u{FE0F}\s]/gu, '');
                   updateForm('notes', clean);
                 } catch (error) {
                   updateForm('notes', val);
@@ -971,7 +971,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
             <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">{t('bookForm.comment')}</label>
             <textarea
               maxLength={2000}
-              className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border-none text-xs font-medium resize-none h-24"
+              className="w-full bg-gray-50 p-3 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 border border-gray-200 text-xs font-medium resize-none h-24"
               value={form.comment || ''}
               onChange={(e) => updateForm('comment', sanitizeText(e.target.value, 2000))}
             />

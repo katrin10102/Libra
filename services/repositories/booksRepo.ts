@@ -8,6 +8,10 @@ const splitBook = async (book: Book): Promise<{ meta: BookMetaRow; cover?: Cover
   let coverBlob = book.coverBlob;
   let coverUrl = book.coverUrl || '';
 
+  if (coverUrl && !coverUrl.startsWith('blob:') && !coverUrl.startsWith('data:')) {
+    coverBlob = undefined;
+  }
+
   if (coverBlob && coverUrl.startsWith('blob:')) {
     coverUrl = '';
   }

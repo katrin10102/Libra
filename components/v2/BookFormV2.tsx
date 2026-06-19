@@ -24,7 +24,7 @@ interface BookFormV2Props {
 const sanitizeText = (value: string, maxLen: number): string => {
   return value
     .slice(0, maxLen)
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200D\uFEFF]/g, '');
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFEFF]/g, '');
 };
 
 const normalizeFormats = (formats?: BookFormat[]): BookFormat[] => {

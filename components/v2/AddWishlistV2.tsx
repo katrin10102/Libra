@@ -6,7 +6,7 @@ import { BookCover } from '../ui/BookCover';
 import { useI18n } from '../../contexts/I18nContext';
 import { fetchBookCover } from '../../services/storageService';
 import { useUI } from '../../contexts/UIContext';
-import { parserInstance } from '../../services/MBooksParser';
+import { cleanAuthorString, parserInstance } from '../../services/MBooksParser';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
 interface AddWishlistV2Props {
@@ -60,7 +60,7 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
 
       // Success! Populate the form with parsed values
       setTitle(parsedBook.title || title);
-      setAuthor(parsedBook.author || parsedBook.authorSeries || author || '-');
+      setAuthor(cleanAuthorString(parsedBook.author || parsedBook.authorSeries || author || '-'));
       setPublisher(parsedBook.publisher || publisher || '');
       setPagesTotal(parsedBook.pages || pagesTotal || 0);
       setSeries(parsedBook.authorSeries || series || '');

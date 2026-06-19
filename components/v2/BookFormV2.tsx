@@ -7,7 +7,7 @@ import { useI18n } from '../../contexts/I18nContext';
 import { MessageKey } from '../../i18n/messages';
 import { fetchBookCover } from '../../services/storageService';
 import { useUI } from '../../contexts/UIContext';
-import { parserInstance } from '../../services/MBooksParser';
+import { cleanAuthorString, parserInstance } from '../../services/MBooksParser';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
 interface BookFormV2Props {
@@ -323,7 +323,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
       setForm((prev) => ({
         ...prev,
         title: parsedBook.title || prev.title,
-        author: parsedBook.author || parsedBook.authorSeries || prev.author || '-',
+        author: cleanAuthorString(parsedBook.author || parsedBook.authorSeries || prev.author || '-'),
         publisher: parsedBook.publisher || prev.publisher || '',
         pagesTotal: parsedBook.pages || prev.pagesTotal || 0,
         series: parsedBook.authorSeries || prev.series || '',

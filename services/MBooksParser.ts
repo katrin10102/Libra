@@ -99,7 +99,7 @@ export class MBooksParser {
       }
     }
     if (authors.length > 0) {
-      result.author = authors.join(', ');
+      result.author = cleanAuthorString(authors.join(', '));
     }
 
     // 3. Cover Image
@@ -182,7 +182,7 @@ export class MBooksParser {
 
       return {
         title: volumeInfo.title || 'Невідома назва',
-        author: volumeInfo.authors ? volumeInfo.authors.join(', ') : 'Невідомий автор',
+        author: cleanAuthorString(volumeInfo.authors ? volumeInfo.authors.join(', ') : 'Невідомий автор'),
         coverImage: cover,
         pages: volumeInfo.pageCount || undefined,
         publisher: volumeInfo.publisher || 'Google Books',
@@ -213,7 +213,7 @@ export class MBooksParser {
       const bookInfo = data[bibKey];
       
       const title = bookInfo.title || 'Невідома назва';
-      const author = bookInfo.authors ? bookInfo.authors.map((a: any) => a.name).join(', ') : 'Невідомий автор';
+      const author = cleanAuthorString(bookInfo.authors ? bookInfo.authors.map((a: any) => a.name).join(', ') : 'Невідомий автор');
       
       let cover = '';
       if (bookInfo.cover) {
@@ -327,4 +327,59 @@ const fetchHtml = async (url: string): Promise<string> => {
 };
 
 export const parserInstance = new MBooksParser(fetchHtml);
+
+export const cleanAuthorString = (authorStr: string | undefined): string => {
+  if (!authorStr) return '';
+  
+  // Replace HTML entities like &nbsp; and non-breaking spaces with standard space
+  const cleaned = authorStr
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\u00A0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+    
+  // Split by common separators (comma, semicolon)
+  const items = cleaned.split(/[,;]/);
+  const uniqueNames: string[] = [];
+  const normalizedSet = new Set<string>();
+  
+  for (const item of items) {
+    const trimmed = item.replace(/<[^>]+>/g, '').trim();
+    if (!trimmed) continue;
+    
+    // Normalize to check for duplicate entries regardless of subtle case, punctuation or invisible formatting
+    const normalized = trimmed.toLowerCase()
+      .replace(/[\s\p{Punctuation}]/gu, '')
+      .replace(/\uFE0F/g, ''); // strip emoji variant selector
+      
+    if (normalized && !normalizedSet.has(normalized)) {
+      normalizedSet.add(normalized);
+      uniqueNames.push(trimmed);
+    }
+  }
+  
+  // Deduplicate case where one name is just another name with a leading character (e.g. avatar letter prefix "М" + "Мосян Тонсьов")
+  const filteredNames: string[] = [];
+  for (let i = 0; i < uniqueNames.length; i++) {
+    const current = uniqueNames[i];
+    const currentNorm = current.toLowerCase().replace(/[\s\p{Punctuation}]/gu, '').replace(/\uFE0F/g, '');
+    
+    let isDuplicated = false;
+    for (let j = 0; j < uniqueNames.length; j++) {
+      if (i === j) continue;
+      const other = uniqueNames[j];
+      const otherNorm = other.toLowerCase().replace(/[\s\p{Punctuation}]/gu, '').replace(/\uFE0F/g, '');
+      
+      if (currentNorm.endsWith(otherNorm) && currentNorm.length > otherNorm.length && currentNorm.length <= otherNorm.length + 2) {
+        isDuplicated = true;
+        break;
+      }
+    }
+    if (!isDuplicated) {
+      filteredNames.push(current);
+    }
+  }
+  
+  return filteredNames.join(', ');
+};
 

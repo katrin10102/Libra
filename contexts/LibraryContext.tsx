@@ -138,6 +138,8 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (finalBook.status === 'Wishlist' || finalBook.status === 'Unread') {
         finalBook.readingStartedAt = undefined;
         finalBook.completedAt = undefined;
+        finalBook.completedDates = undefined;
+        finalBook.currentCycleIndex = undefined;
         finalBook.pagesRead = 0;
         finalBook.sessions = []; // Clear reading history
         finalBook.rating = undefined; // Clear rating as it's not read
@@ -153,6 +155,18 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
           if (!finalBook.wishlistedAt) {
             finalBook.wishlistedAt = new Date().toISOString();
           }
+        }
+    } else if (finalBook.status === 'Reading') {
+        // If currently reading, it cannot be completed in this cycle
+        finalBook.completedAt = undefined;
+        // Preserve any existing completedDates, sessions, and rating for re-reading!
+    } else if (finalBook.status === 'Completed') {
+        if (!finalBook.completedAt) {
+            finalBook.completedAt = new Date().toISOString();
+        }
+        const dates = finalBook.completedDates || [];
+        if (!dates.includes(finalBook.completedAt)) {
+            finalBook.completedDates = [...dates, finalBook.completedAt];
         }
     }
 

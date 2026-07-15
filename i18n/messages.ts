@@ -128,6 +128,9 @@ const en = {
   'bookForm.isbnScanStop': 'Stop Scanner',
   'bookForm.isbnScanError': 'Failed to start camera or access denied',
   'bookForm.isbnFound': 'Found code',
+  'bookForm.readingHistoryTitle': 'Reading History',
+  'bookForm.addReadingDate': 'Add reading date',
+  'bookForm.deleteReadingDate': 'Delete date record',
 
   'details.publisher': 'Publisher',
   'details.genre': 'Genre',
@@ -410,6 +413,9 @@ const uk: Record<keyof typeof en, string> = {
   'bookForm.isbnScanStop': 'Вимкнути камеру',
   'bookForm.isbnScanError': 'Не вдалося запустити камеру або доступ відхилено',
   'bookForm.isbnFound': 'Знайдено код',
+  'bookForm.readingHistoryTitle': 'Історія прочитань книги',
+  'bookForm.addReadingDate': 'Додати дату прочитання',
+  'bookForm.deleteReadingDate': 'Видалити запис про прочитання',
 
   'details.publisher': 'Видавництво',
   'details.genre': 'Жанр',

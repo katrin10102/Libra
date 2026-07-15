@@ -114,12 +114,63 @@
 
 <link rel="stylesheet" href="/index.css">
     <script>
-      // Register Service Worker
-      if ('serviceWorker' in navigator) {
+      // Register Service Worker only in production, not in dev/preview
+      const isDev = window.location.hostname.includes('ais-dev') || 
+                    window.location.hostname.includes('ais-pre') || 
+                    window.location.hostname.includes('localhost') || 
+                    window.location.hostname.includes('127.0.0.1');
+
+      if (!isDev && 'serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('./sw.js')
             .then((reg) => console.log('ServiceWorker registered with scope: ', reg.scope))
             .catch((err) => console.error('ServiceWorker registration failed: ', err));
+        });
+      } else if (isDev) {
+        // Automatically unregister service workers and clear cache in development/preview
+        const promises = [];
+        let needsReload = false;
+
+        if ('serviceWorker' in navigator) {
+          promises.push(
+            navigator.serviceWorker.getRegistrations().then((registrations) => {
+              if (registrations && registrations.length > 0) {
+                needsReload = true;
+                return Promise.all(
+                  registrations.map((registration) => {
+                    console.log('[Dev] Unregistering service worker:', registration.scope);
+                    return registration.unregister();
+                  })
+                );
+              }
+            })
+          );
+        }
+
+        if ('caches' in window) {
+          promises.push(
+            caches.keys().then((names) => {
+              if (names && names.length > 0) {
+                needsReload = true;
+                return Promise.all(
+                  names.map((name) => {
+                    console.log('[Dev] Deleting cache:', name);
+                    return caches.delete(name);
+                  })
+                );
+              }
+            })
+          );
+        }
+
+        Promise.all(promises).then(() => {
+          if (needsReload && !sessionStorage.getItem('dev-sw-cleared')) {
+            sessionStorage.setItem('dev-sw-cleared', 'true');
+            console.log('[Dev] Cleared Service Workers and Caches. Reloading page to apply clean slate...');
+            window.location.reload();
+          }
+        }).catch((err) => {
+          console.error('[Dev] Error clearing service worker/caches:', err);
         });
       }
 

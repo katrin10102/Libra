@@ -386,14 +386,19 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
         });
 
         html5QrCode.start(
+          { facingMode: "environment" },
           {
-            facingMode: "environment",
-            width: { min: 640, ideal: 1280, max: 1920 },
-            height: { min: 480, ideal: 720, max: 1080 }
-          },
-          {
-            fps: 25,
-            disableFlip: true,
+            fps: 20,
+            qrbox: (w, h) => {
+              const width = w || 640;
+              const height = h || 480;
+              const boxWidth = Math.min(Math.round(width * 0.85), 480);
+              const boxHeight = Math.min(Math.max(130, Math.round(height * 0.35)), 200);
+              return {
+                width: boxWidth,
+                height: boxHeight
+              };
+            },
             experimentalFeatures: {
               useBarCodeDetectorIfSupported: true
             }

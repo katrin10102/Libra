@@ -73,7 +73,10 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
     comment: initialValue.comment || '',
     seasons: normalizeSeasons(initialValue.seasons),
     completedAt: initialValue.completedAt,
-    completedDates: initialValue.completedDates || [],
+    completedDates: (initialValue.completedDates || []).filter(d => {
+      if (!initialValue.completedAt) return true;
+      return d.substring(0, 10) !== initialValue.completedAt.substring(0, 10);
+    }),
     rating: initialValue.rating,
     addedAt: initialValue.addedAt || ((initialValue.status || allowedStatuses[0] || 'Unread') !== 'Wishlist' ? new Date().toISOString() : ''),
     wishlistedAt: initialValue.wishlistedAt,
@@ -888,24 +891,17 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                     className="w-full block bg-gray-50 p-3 rounded-2xl text-xs font-bold border border-gray-200 outline-none appearance-none min-w-0 box-border max-w-full"
                     value={form.completedAt ? form.completedAt.substring(0, 10) : ''}
                     onChange={(e) => {
-                      const newCompletedAt = e.target.value ? new Date(e.target.value).toISOString() : undefined;
+                      const val = e.target.value;
+                      const nextCompletedAt = val ? new Date(val).toISOString() : undefined;
                       setForm((prev) => {
-                        const currentDates = prev.completedDates || [];
-                        let updatedDates = [...currentDates];
-                        
-                        if (newCompletedAt) {
-                          const oldCompletedAt = prev.completedAt;
-                          if (oldCompletedAt && updatedDates.includes(oldCompletedAt)) {
-                            updatedDates = updatedDates.map(d => d === oldCompletedAt ? newCompletedAt : d);
-                          } else if (!updatedDates.includes(newCompletedAt)) {
-                            updatedDates = [...updatedDates, newCompletedAt];
-                          }
+                        let updatedDates = prev.completedDates || [];
+                        if (nextCompletedAt) {
+                          updatedDates = updatedDates.filter(d => d.substring(0, 10) !== nextCompletedAt.substring(0, 10));
                         }
-                        
                         return {
                           ...prev,
-                          completedAt: newCompletedAt,
-                          completedDates: updatedDates,
+                          completedAt: nextCompletedAt,
+                          completedDates: updatedDates
                         };
                       });
                     }}
@@ -929,92 +925,96 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
               </div>
 
               {/* Advanced Reading History Editor */}
-              <div className="bg-gray-50/50 p-4 rounded-3xl border border-gray-100 space-y-3 animate-in fade-in slide-in-from-top-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">
-                    {t('bookForm.readingHistoryTitle')}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newDate = new Date().toISOString();
-                      setForm((prev) => {
-                        const updatedDates = [...(prev.completedDates || []), newDate];
-                        return {
-                          ...prev,
-                          completedDates: updatedDates,
-                          completedAt: newDate,
-                        };
-                      });
-                    }}
-                    className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100/55 px-2.5 py-1.5 rounded-xl transition-all"
-                  >
-                    <Plus size={14} />
-                    <span>{t('bookForm.addReadingDate')}</span>
-                  </button>
-                </div>
+              <div className="pt-4 border-t border-dashed border-gray-200/80 animate-in fade-in slide-in-from-top-1">
+                <div className="bg-gray-50/50 p-4 rounded-3xl border border-gray-100 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                      {t('bookForm.readingHistoryTitle')}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        let newDate = new Date();
+                        while (
+                          (form.completedAt && newDate.toISOString().substring(0, 10) === form.completedAt.substring(0, 10)) ||
+                          (form.completedDates || []).some(d => d.substring(0, 10) === newDate.toISOString().substring(0, 10))
+                        ) {
+                          newDate.setDate(newDate.getDate() - 1);
+                        }
+                        const newDateStr = newDate.toISOString();
+                        setForm((prev) => {
+                          const updatedDates = [...(prev.completedDates || []), newDateStr];
+                          return {
+                            ...prev,
+                            completedDates: updatedDates,
+                          };
+                        });
+                      }}
+                      className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100/55 px-2.5 py-1.5 rounded-xl transition-all"
+                    >
+                      <Plus size={14} />
+                      <span>{t('bookForm.addReadingDate')}</span>
+                    </button>
+                  </div>
 
-                {(!form.completedDates || form.completedDates.length === 0) ? (
-                  <p className="text-[11px] text-gray-400 font-medium italic">
-                    {useI18n().language === 'uk' ? 'Немає записів про прочитання книги' : 'No reading records found'}
-                  </p>
-                ) : (
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                    {form.completedDates.map((dateStr, idx) => (
-                      <div key={idx} className="grid grid-cols-[1fr_auto] gap-2 items-center">
-                        <div className="min-w-0 relative">
-                          <input
-                            type="date"
-                            required
-                            className="w-full block min-w-0 max-w-full bg-white p-2.5 px-3 rounded-xl text-xs font-bold border border-gray-100 outline-none focus:border-indigo-200 appearance-none"
-                            value={dateStr ? dateStr.substring(0, 10) : ''}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (!val) return;
-                              setForm((prev) => {
-                                const updatedDates = [...(prev.completedDates || [])];
-                                const d = new Date(val);
-                                if (!isNaN(d.getTime())) {
-                                  const originalDate = new Date(dateStr);
-                                  if (!isNaN(originalDate.getTime())) {
-                                    d.setHours(originalDate.getHours());
-                                    d.setMinutes(originalDate.getMinutes());
-                                    d.setSeconds(originalDate.getSeconds());
+                  {(!form.completedDates || form.completedDates.length === 0) ? (
+                    <p className="text-[11px] text-gray-400 font-medium italic">
+                      {useI18n().language === 'uk' ? 'Немає попередніх записів про прочитання' : 'No previous reading records found'}
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                      {form.completedDates.map((dateStr, idx) => (
+                        <div key={idx} className="grid grid-cols-[1fr_auto] gap-2 items-center">
+                          <div className="min-w-0 relative">
+                            <input
+                              type="date"
+                              required
+                              className="w-full block min-w-0 max-w-full bg-white p-2.5 px-3 rounded-xl text-xs font-bold border border-gray-100 outline-none focus:border-indigo-200 appearance-none"
+                              value={dateStr ? dateStr.substring(0, 10) : ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (!val) return;
+                                setForm((prev) => {
+                                  const updatedDates = [...(prev.completedDates || [])];
+                                  const d = new Date(val);
+                                  if (!isNaN(d.getTime())) {
+                                    const originalDate = new Date(dateStr);
+                                    if (!isNaN(originalDate.getTime())) {
+                                      d.setHours(originalDate.getHours());
+                                      d.setMinutes(originalDate.getMinutes());
+                                      d.setSeconds(originalDate.getSeconds());
+                                    }
+                                    updatedDates[idx] = d.toISOString();
                                   }
-                                  updatedDates[idx] = d.toISOString();
-                                }
-                                const sorted = [...updatedDates].sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+                                  return {
+                                    ...prev,
+                                    completedDates: updatedDates,
+                                  };
+                                });
+                              }}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm((prev) => {
+                                const updatedDates = (prev.completedDates || []).filter((_, i) => i !== idx);
                                 return {
                                   ...prev,
                                   completedDates: updatedDates,
-                                  completedAt: sorted[sorted.length - 1] || prev.completedAt,
                                 };
                               });
                             }}
-                          />
+                            className="p-2.5 bg-red-50 hover:bg-red-100 text-red-500 rounded-xl transition-all active:scale-95 flex-shrink-0"
+                            title={t('bookForm.deleteReadingDate')}
+                          >
+                            <Trash2 size={15} />
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setForm((prev) => {
-                              const updatedDates = (prev.completedDates || []).filter((_, i) => i !== idx);
-                              const sorted = [...updatedDates].sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
-                              return {
-                                ...prev,
-                                completedDates: updatedDates,
-                                completedAt: sorted[sorted.length - 1] || undefined,
-                              };
-                            });
-                          }}
-                          className="p-2.5 bg-red-50 hover:bg-red-100 text-red-500 rounded-xl transition-all active:scale-95 flex-shrink-0"
-                          title={t('bookForm.deleteReadingDate')}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

@@ -392,10 +392,16 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
             qrbox: (w, h) => {
               const width = w || 640;
               const height = h || 480;
-              const size = Math.min(width, height);
+              
+              // EAN barcodes are horizontal and wide.
+              // Let's make the scan zone occupy 85% of the camera stream's width.
+              const boxWidth = Math.round(width * 0.85);
+              // For height, let's take a generous 35% of stream height, with a minimum of 130px for easy alignment.
+              const boxHeight = Math.max(130, Math.round(height * 0.35));
+              
               return {
-                width: Math.min(size * 0.9, 300),
-                height: Math.min(size * 0.4, 120)
+                width: Math.min(boxWidth, width - 10),
+                height: Math.min(boxHeight, height - 10)
               };
             },
             experimentalFeatures: {
@@ -619,12 +625,20 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
 
                   <div className={activeMode === 'scan' ? 'block space-y-4' : 'hidden'}>
                     <div className="space-y-4">
-                      <div className="relative aspect-square max-h-[320px] mx-auto w-full rounded-2xl overflow-hidden bg-black border border-gray-100 flex items-center justify-center">
-                        <div id="bookform-scanner-reader" className="absolute inset-0 w-full h-full" />
+                      <div className="relative min-h-[240px] max-h-[320px] mx-auto w-full rounded-2xl overflow-hidden bg-black border border-gray-100 flex flex-col items-center justify-center">
+                        <div id="bookform-scanner-reader" className="w-full h-full" />
                         
                         {activeMode === 'scan' && !scanError && (
-                          <div className="absolute inset-x-4 top-1/2 h-0.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] pointer-events-none z-10" 
-                               style={{ animation: 'scanLaser 2.5s linear infinite' }} />
+                          <>
+                            <style>{`
+                              @keyframes scanLaser {
+                                0% { top: 15%; }
+                                100% { top: 85%; }
+                              }
+                            `}</style>
+                            <div className="absolute inset-x-4 h-0.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] pointer-events-none z-10" 
+                                 style={{ animation: 'scanLaser 2.2s ease-in-out infinite alternate' }} />
+                          </>
                         )}
 
                         {scanError && (

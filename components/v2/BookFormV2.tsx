@@ -386,24 +386,14 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
         });
 
         html5QrCode.start(
-          { facingMode: "environment" },
           {
-            fps: 15,
-            qrbox: (w, h) => {
-              const width = w || 640;
-              const height = h || 480;
-              
-              // EAN barcodes are horizontal and wide.
-              // Let's make the scan zone occupy 85% of the camera stream's width.
-              const boxWidth = Math.round(width * 0.85);
-              // For height, let's take a generous 35% of stream height, with a minimum of 130px for easy alignment.
-              const boxHeight = Math.max(130, Math.round(height * 0.35));
-              
-              return {
-                width: Math.min(boxWidth, width - 10),
-                height: Math.min(boxHeight, height - 10)
-              };
-            },
+            facingMode: "environment",
+            width: { min: 640, ideal: 1280, max: 1920 },
+            height: { min: 480, ideal: 720, max: 1080 }
+          },
+          {
+            fps: 25,
+            disableFlip: true,
             experimentalFeatures: {
               useBarCodeDetectorIfSupported: true
             }
@@ -631,13 +621,38 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                         {activeMode === 'scan' && !scanError && (
                           <>
                             <style>{`
-                              @keyframes scanLaser {
-                                0% { top: 15%; }
-                                100% { top: 85%; }
+                              @keyframes scanLaserLine {
+                                0% { transform: translateY(5px); }
+                                100% { transform: translateY(115px); }
                               }
                             `}</style>
-                            <div className="absolute inset-x-4 h-0.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] pointer-events-none z-10" 
-                                 style={{ animation: 'scanLaser 2.2s ease-in-out infinite alternate' }} />
+                            
+                            {/* Dark translucent overlay with a targeting area in the center */}
+                            <div className="absolute inset-0 flex flex-col items-center justify-between pointer-events-none z-10 p-4 bg-black/40">
+                              {/* Top Spacer */}
+                              <div className="flex-1" />
+
+                              {/* Beautiful targeting box centered */}
+                              <div className="relative w-[85%] h-[120px] border border-white/20 rounded-xl bg-black/25 flex items-center justify-center shadow-[0_0_15px_rgba(0,0,0,0.5)]">
+                                {/* Corner brackets (highly visible neon) */}
+                                <div className="absolute -top-[1px] -left-[1px] w-5 h-5 border-t-[3px] border-l-[3px] border-indigo-500 rounded-tl-md" />
+                                <div className="absolute -top-[1px] -right-[1px] w-5 h-5 border-t-[3px] border-r-[3px] border-indigo-500 rounded-tr-md" />
+                                <div className="absolute -bottom-[1px] -left-[1px] w-5 h-5 border-b-[3px] border-l-[3px] border-indigo-500 rounded-bl-md" />
+                                <div className="absolute -bottom-[1px] -right-[1px] w-5 h-5 border-b-[3px] border-r-[3px] border-indigo-500 rounded-br-md" />
+                                
+                                {/* Moving Laser bar inside the box */}
+                                <div className="absolute top-0 left-3 right-3 h-0.5 bg-red-500 shadow-[0_0_10px_#ef4444,0_0_4px_#ef4444] rounded animate-pulse" 
+                                     style={{ animation: 'scanLaserLine 2s ease-in-out infinite alternate' }} />
+                              </div>
+
+                              {/* Bottom Spacer */}
+                              <div className="flex-1" />
+                              
+                              {/* Dynamic tip informing user to hold the camera slightly back for focus */}
+                              <p className="text-[10px] text-white bg-black/75 backdrop-blur-sm px-3 py-1.5 rounded-full font-bold text-center border border-white/10 uppercase tracking-wider shadow-lg max-w-[90%] leading-tight">
+                                {t('bookForm.isbnScanTip')}
+                              </p>
+                            </div>
                           </>
                         )}
 

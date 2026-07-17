@@ -361,9 +361,18 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
     let html5QrCode: Html5Qrcode | null = null;
     const elementId = "bookform-scanner-reader";
     setScanError(null);
+    let isMounted = true;
 
     const timer = setTimeout(() => {
+      if (!isMounted) return;
+
       try {
+        const element = document.getElementById(elementId);
+        if (!element) {
+          console.error("Scanner element not found");
+          return;
+        }
+
         html5QrCode = new Html5Qrcode(elementId, {
           formatsToSupport: [
             Html5QrcodeSupportedFormats.EAN_13,
@@ -375,6 +384,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
           ],
           verbose: false
         });
+
         html5QrCode.start(
           { facingMode: "environment" },
           {
@@ -384,14 +394,14 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
               const height = h || 480;
               const size = Math.min(width, height);
               return {
-                width: Math.min(size * 0.85, 280),
-                height: Math.min(size * 0.35, 100)
+                width: Math.min(size * 0.9, 300),
+                height: Math.min(size * 0.4, 120)
               };
             },
-            videoConstraints: {
-              facingMode: "environment"
+            experimentalFeatures: {
+              useBarCodeDetectorIfSupported: true
             }
-          },
+          } as any,
           (decodedText) => {
             if (navigator.vibrate) {
               navigator.vibrate(100);
@@ -404,17 +414,31 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
           (errorMessage) => {
             // Uncritical scan stream callbacks
           }
-        ).catch((err) => {
+        ).then(() => {
+          // If we unmounted/stopped while it was starting, stop it now!
+          if (!isMounted && html5QrCode) {
+            html5QrCode.stop().then(() => {
+              html5QrCode?.clear();
+            }).catch((err) => {
+              console.error("Clean up stop failed after delayed start:", err);
+            });
+          }
+        }).catch((err) => {
           console.error("Scanner startup issue:", err);
-          setScanError(t('bookForm.isbnScanError'));
+          if (isMounted) {
+            setScanError(t('bookForm.isbnScanError'));
+          }
         });
       } catch (err) {
         console.error("Scanner exception:", err);
-        setScanError(t('bookForm.isbnScanError'));
+        if (isMounted) {
+          setScanError(t('bookForm.isbnScanError'));
+        }
       }
-    }, 150);
+    }, 100);
 
     return () => {
+      isMounted = false;
       clearTimeout(timer);
       if (html5QrCode) {
         if (html5QrCode.isScanning) {
@@ -557,12 +581,12 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                     </button>
                   </div>
 
-                  {activeMode === 'manual' ? (
+                  <div className={activeMode === 'manual' ? 'block' : 'hidden'}>
                     <form onSubmit={handleIsbnSearch} className="space-y-4">
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">ISBN / {t('bookForm.isbn')}</label>
                         <input
-                          required
+                          required={activeMode === 'manual'}
                           autoFocus
                           type="text"
                           placeholder="978-..."
@@ -591,7 +615,9 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                         </button>
                       </div>
                     </form>
-                  ) : (
+                  </div>
+
+                  <div className={activeMode === 'scan' ? 'block space-y-4' : 'hidden'}>
                     <div className="space-y-4">
                       <div className="relative aspect-square max-h-[320px] mx-auto w-full rounded-2xl overflow-hidden bg-black border border-gray-100 flex items-center justify-center">
                         <div id="bookform-scanner-reader" className="absolute inset-0 w-full h-full" />
@@ -636,7 +662,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                         </button>
                       </div>
                     </div>
-                  )}
+                  </div>
                 </>
               )}
             </div>

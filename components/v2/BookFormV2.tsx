@@ -881,7 +881,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
             </div>
           )}
 
-          {form.status === 'Completed' && (
+          {(form.status === 'Completed' || !!form.completedAt || (form.completedDates && form.completedDates.length > 0)) && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-1">
                 <div className="space-y-1 min-w-0">

@@ -9,6 +9,7 @@ export interface ReadingSessionData {
   pages: number; // number of pages read in this session (or percentage points for Audio)
   format?: BookFormat;
   cycleIndex?: number;
+  isSkipped?: boolean;
 }
 
 export interface Book {

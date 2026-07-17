@@ -243,6 +243,19 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
     const finalDuration = session.accumulatedTime;
     const currentCycle = book.currentCycleIndex || 0;
 
+    const skippedCount = session.startPage - (book.pagesRead || 0);
+    const skippedSessions: ReadingSessionData[] = [];
+    if (skippedCount > 0) {
+      skippedSessions.push({
+        id: createClientId(),
+        date: today,
+        duration: skippedCount * 60, // 1 page per minute = 60 seconds per page
+        pages: skippedCount,
+        cycleIndex: currentCycle,
+        isSkipped: true
+      });
+    }
+
     const newSession: ReadingSessionData = {
       id: createClientId(),
       date: today,
@@ -251,7 +264,7 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
       cycleIndex: currentCycle
     };
 
-    const nextSessions = [...(book.sessions || []), newSession];
+    const nextSessions = [...(book.sessions || []), ...skippedSessions, newSession];
     // Optimistic UI for all sessions
     setDiarySessions(nextSessions);
 
@@ -486,11 +499,24 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
 
                           return (
                               <React.Fragment key={s.id}>
-                                  <div className="bg-white border border-gray-100 rounded-2xl p-2 shadow-sm flex items-stretch gap-2">
+                                  <div className={`border rounded-2xl p-2 shadow-sm flex items-stretch gap-2 transition-all ${s.isSkipped ? 'bg-indigo-50/35 border-indigo-100/40' : 'bg-white border-gray-100'}`}>
                                       <div className="flex-1 grid grid-cols-4 gap-2">
                                           <div className="flex flex-col items-center justify-center bg-gray-50 rounded-xl p-1.5 min-w-0">
                                               <div className="flex items-center gap-1 mb-0.5"><Calendar size={10} className="text-gray-400" /><span className="text-[9px] text-gray-400 uppercase font-bold truncate">Дата</span></div>
-                                              {isEditing ? (<input type="date" className="w-full bg-white text-[10px] rounded border border-gray-200 p-0.5" value={s.date} onChange={(e) => updateSession(s.id, 'date', e.target.value)} />) : (<span className="text-xs font-bold text-gray-700 truncate">{new Date(s.date).toLocaleDateString('uk-UA', {day: '2-digit', month: '2-digit'})}</span>)}
+                                              {isEditing ? (
+                                                <input type="date" className="w-full bg-white text-[10px] rounded border border-gray-200 p-0.5" value={s.date} onChange={(e) => updateSession(s.id, 'date', e.target.value)} />
+                                              ) : (
+                                                <div className="flex flex-col items-center justify-center">
+                                                  <span className="text-xs font-bold text-gray-700 truncate">
+                                                    {new Date(s.date).toLocaleDateString('uk-UA', {day: '2-digit', month: '2-digit'})}
+                                                  </span>
+                                                  {s.isSkipped && (
+                                                    <span className="text-[7px] bg-indigo-100 text-indigo-700 font-extrabold px-1 py-0.5 rounded mt-0.5 whitespace-nowrap leading-none">
+                                                      {t('reading.autoFilled' as any)}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              )}
                                           </div>
                                           <div className="flex flex-col items-center justify-center bg-gray-50 rounded-xl p-1.5 min-w-0">
                                               <div className="flex items-center gap-1 mb-0.5"><FileText size={10} className="text-gray-400" /><span className="text-[9px] text-gray-400 uppercase font-bold truncate">{book.selectedReadingFormat === 'Audio' ? 'Відс' : 'Стор'}</span></div>

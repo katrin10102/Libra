@@ -131,6 +131,8 @@ const en = {
   'bookForm.readingHistoryTitle': 'Reading History',
   'bookForm.addReadingDate': 'Add reading date',
   'bookForm.deleteReadingDate': 'Delete date record',
+  'reading.autoFilled': 'Auto-filled',
+  'reading.skipped': 'Skipped pages',
 
   'details.publisher': 'Publisher',
   'details.genre': 'Genre',
@@ -416,6 +418,8 @@ const uk: Record<keyof typeof en, string> = {
   'bookForm.readingHistoryTitle': 'Історія прочитань книги',
   'bookForm.addReadingDate': 'Додати дату прочитання',
   'bookForm.deleteReadingDate': 'Видалити запис про прочитання',
+  'reading.autoFilled': 'Авто-заповнено',
+  'reading.skipped': 'Пропущені сторінки',
 
   'details.publisher': 'Видавництво',
   'details.genre': 'Жанр',

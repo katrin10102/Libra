@@ -961,12 +961,12 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                 ) : (
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                     {form.completedDates.map((dateStr, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <div className="flex-1 min-w-0 relative">
+                      <div key={idx} className="grid grid-cols-[1fr_auto] gap-2 items-center">
+                        <div className="min-w-0 relative">
                           <input
                             type="date"
                             required
-                            className="w-full bg-white p-2.5 px-3 rounded-xl text-xs font-bold border border-gray-100 outline-none focus:border-indigo-200"
+                            className="w-full block min-w-0 max-w-full bg-white p-2.5 px-3 rounded-xl text-xs font-bold border border-gray-100 outline-none focus:border-indigo-200 appearance-none"
                             value={dateStr ? dateStr.substring(0, 10) : ''}
                             onChange={(e) => {
                               const val = e.target.value;

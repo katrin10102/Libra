@@ -388,17 +388,8 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
         html5QrCode.start(
           { facingMode: "environment" },
           {
-            fps: 20,
-            qrbox: (w, h) => {
-              const width = w || 640;
-              const height = h || 480;
-              const boxWidth = Math.min(Math.round(width * 0.85), 480);
-              const boxHeight = Math.min(Math.max(130, Math.round(height * 0.35)), 200);
-              return {
-                width: boxWidth,
-                height: boxHeight
-              };
-            },
+            fps: 10,
+            disableFlip: true,
             experimentalFeatures: {
               useBarCodeDetectorIfSupported: true
             }
@@ -620,15 +611,28 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
 
                   <div className={activeMode === 'scan' ? 'block space-y-4' : 'hidden'}>
                     <div className="space-y-4">
-                      <div className="relative min-h-[240px] max-h-[320px] mx-auto w-full rounded-2xl overflow-hidden bg-black border border-gray-100 flex flex-col items-center justify-center">
-                        <div id="bookform-scanner-reader" className="w-full h-full" />
+                      <div className="relative aspect-[4/3] max-h-[300px] mx-auto w-full rounded-2xl overflow-hidden bg-black border border-gray-100 flex items-center justify-center">
+                        <div id="bookform-scanner-reader" className="absolute inset-0 w-full h-full" />
                         
                         {activeMode === 'scan' && !scanError && (
                           <>
                             <style>{`
+                              #bookform-scanner-reader {
+                                width: 100% !important;
+                                height: 100% !important;
+                                position: absolute !important;
+                                top: 0 !important;
+                                left: 0 !important;
+                              }
+                              #bookform-scanner-reader video {
+                                width: 100% !important;
+                                height: 100% !important;
+                                object-fit: cover !important;
+                                border-radius: 1rem !important;
+                              }
                               @keyframes scanLaserLine {
-                                0% { transform: translateY(5px); }
-                                100% { transform: translateY(115px); }
+                                0% { top: 15%; }
+                                100% { top: 85%; }
                               }
                             `}</style>
                             
@@ -636,7 +640,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                             <div className="absolute inset-0 flex flex-col items-center justify-between pointer-events-none z-10 p-4 bg-black/40">
                               {/* Top Spacer */}
                               <div className="flex-1" />
-
+ 
                               {/* Beautiful targeting box centered */}
                               <div className="relative w-[85%] h-[120px] border border-white/20 rounded-xl bg-black/25 flex items-center justify-center shadow-[0_0_15px_rgba(0,0,0,0.5)]">
                                 {/* Corner brackets (highly visible neon) */}
@@ -646,10 +650,10 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                                 <div className="absolute -bottom-[1px] -right-[1px] w-5 h-5 border-b-[3px] border-r-[3px] border-indigo-500 rounded-br-md" />
                                 
                                 {/* Moving Laser bar inside the box */}
-                                <div className="absolute top-0 left-3 right-3 h-0.5 bg-red-500 shadow-[0_0_10px_#ef4444,0_0_4px_#ef4444] rounded animate-pulse" 
+                                <div className="absolute left-3 right-3 h-0.5 bg-red-500 shadow-[0_0_10px_#ef4444,0_0_4px_#ef4444] rounded" 
                                      style={{ animation: 'scanLaserLine 2s ease-in-out infinite alternate' }} />
                               </div>
-
+ 
                               {/* Bottom Spacer */}
                               <div className="flex-1" />
                               

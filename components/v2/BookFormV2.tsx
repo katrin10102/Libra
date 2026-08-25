@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Barcode, Camera, Image as ImageIcon, Keyboard, Loader2, Save, Wand2, Plus, Trash2 } from 'lucide-react';
 import { Book, BookFormat, BookStatus } from '../../types';
-import { FORMAT_LABELS, getSeasonColorClass, normalizeSeason, SEASON_OPTIONS, normalizeDateToYMD } from '../../utils';
+import { FORMAT_LABELS, getSeasonColorClass, normalizeSeason, SEASON_OPTIONS, normalizeDateToYMD, normalizeIsbn } from '../../utils';
 import { BookCover } from '../ui/BookCover';
 import { useI18n } from '../../contexts/I18nContext';
 import { MessageKey } from '../../i18n/messages';
@@ -307,7 +307,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
   };
 
   const triggerIsbnSearch = async (rawIsbn: string) => {
-    const cleanIsbn = rawIsbn.replace(/[-\s]/g, '');
+    const cleanIsbn = normalizeIsbn(rawIsbn);
     if (!cleanIsbn) {
       toast.show('ISBN is required', 'info');
       return;
@@ -412,10 +412,11 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
             if (navigator.vibrate) {
               navigator.vibrate(100);
             }
-            toast.show(`${t('bookForm.isbnFound')}: ${decodedText}`, 'success');
-            setIsbnInput(decodedText);
+            const cleaned = normalizeIsbn(decodedText) || decodedText;
+            toast.show(`${t('bookForm.isbnFound')}: ${cleaned}`, 'success');
+            setIsbnInput(cleaned);
             setActiveMode('manual');
-            triggerIsbnSearch(decodedText);
+            triggerIsbnSearch(cleaned);
           },
           (errorMessage) => {
             // Uncritical scan stream callbacks

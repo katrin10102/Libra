@@ -107,6 +107,18 @@ export const normalizeDateToYMD = (dateInput?: string | null): string => {
 };
 
 /**
+ * Robustly normalizes ISBN/EAN strings: removes 'ISBN', 'EAN', dashes, spaces, and punctuation.
+ */
+export const normalizeIsbn = (input?: string | null): string => {
+  if (!input) return '';
+  return input
+    .replace(/^ISBN[-:\s]*/i, '')
+    .replace(/^EAN[-:\s]*/i, '')
+    .replace(/[^0-9Xx]/g, '')
+    .trim();
+};
+
+/**
  * Returns today's local date (or given date) in YYYY-MM-DD format respecting device local time.
  */
 export const getLocalDateString = (d: Date = new Date()): string => {

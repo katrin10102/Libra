@@ -6,6 +6,7 @@ import { BookCover } from '../ui/BookCover';
 import { useI18n } from '../../contexts/I18nContext';
 import { fetchBookCover } from '../../services/storageService';
 import { useUI } from '../../contexts/UIContext';
+import { normalizeIsbn } from '../../utils';
 import { cleanAuthorString, parserInstance } from '../../services/MBooksParser';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
@@ -40,7 +41,7 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
   const [scanError, setScanError] = React.useState<string | null>(null);
 
   const triggerIsbnSearch = async (rawIsbn: string) => {
-    const cleanIsbn = rawIsbn.replace(/[-\s]/g, '');
+    const cleanIsbn = normalizeIsbn(rawIsbn);
     if (!cleanIsbn) {
       toast.show('ISBN is required', 'info');
       return;
@@ -126,10 +127,11 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
             if (navigator.vibrate) {
               navigator.vibrate(100);
             }
-            toast.show(`${t('bookForm.isbnFound')}: ${decodedText}`, 'success');
-            setIsbnInput(decodedText);
+            const cleaned = normalizeIsbn(decodedText) || decodedText;
+            toast.show(`${t('bookForm.isbnFound')}: ${cleaned}`, 'success');
+            setIsbnInput(cleaned);
             setActiveMode('manual');
-            triggerIsbnSearch(decodedText);
+            triggerIsbnSearch(cleaned);
           },
           (errorMessage) => {
             // Uncritical stream scanning callbacks

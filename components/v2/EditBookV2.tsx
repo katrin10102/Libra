@@ -1,8 +1,9 @@
 import React from 'react';
 import { useI18n } from '../../contexts/I18nContext';
+import { useLibrary } from '../../contexts/LibraryContext';
 import { Book } from '../../types';
 import { BookFormV2 } from './BookFormV2';
-import { getBookPageTotal } from '../../utils';
+import { getBookPageTotal, getEffectiveAverageSecondsPerPage, getLocalDateString, normalizeDateToYMD } from '../../utils';
 import { createClientId } from '../../services/id';
 
 interface EditBookV2Props {
@@ -21,6 +22,7 @@ export const EditBookV2: React.FC<EditBookV2Props> = ({
   onCancel,
 }) => {
   const { t } = useI18n();
+  const { books } = useLibrary();
 
   return (
     <BookFormV2
@@ -47,27 +49,44 @@ export const EditBookV2: React.FC<EditBookV2Props> = ({
           if (!merged.completedAt) {
              merged.completedAt = new Date().toISOString();
           }
+          if (!merged.readingStartedAt) {
+             merged.readingStartedAt = merged.completedAt;
+          }
+          const targetDateStr = normalizeDateToYMD(merged.completedAt) || getLocalDateString();
+          const currentCycle = merged.currentCycleIndex || 0;
+          const otherCycleDates = (merged.completedDates || []).filter(
+            (d) => normalizeDateToYMD(d) !== targetDateStr
+          );
+          merged.completedDates = [...otherCycleDates, merged.completedAt];
           const totalPages = getBookPageTotal(merged);
           
           // Calculate already read pages from existing sessions
           const existingSessions = merged.sessions || [];
-          const readPages = existingSessions.reduce((acc, s) => acc + s.pages, 0);
+          const currentCycleSessions = existingSessions.filter(s => (s.cycleIndex || 0) === currentCycle);
+          const readPages = currentCycleSessions.reduce((acc, s) => acc + (Number(s.pages) || 0), 0);
           
           // If there are remaining pages, add a final session
           if (readPages < totalPages && totalPages > 0) {
               const remainingPages = totalPages - readPages;
-              const durationSeconds = Math.round(remainingPages * 72); // 50 pages/hour = 72 seconds/page
-              const dateStr = merged.completedAt.split('T')[0];
+              const avgSecondsPerPage = getEffectiveAverageSecondsPerPage(book, books);
+              const durationSeconds = Math.round(remainingPages * avgSecondsPerPage);
               
               merged.sessions = [
                   ...existingSessions,
                   {
                       id: createClientId(),
-                      date: dateStr,
+                      date: targetDateStr,
                       duration: durationSeconds,
-                      pages: remainingPages
+                      pages: remainingPages,
+                      format: merged.selectedReadingFormat || merged.formats[0] || 'Paper',
+                      cycleIndex: currentCycle,
                   }
               ];
+          } else if (currentCycleSessions.length > 0) {
+              const lastSession = currentCycleSessions[currentCycleSessions.length - 1];
+              if (lastSession.date !== targetDateStr) {
+                merged.sessions = existingSessions.map(s => s.id === lastSession.id ? { ...s, date: targetDateStr } : s);
+              }
           }
           
           // Ensure pagesRead matches total
@@ -81,3 +100,4 @@ export const EditBookV2: React.FC<EditBookV2Props> = ({
     />
   );
 };
+

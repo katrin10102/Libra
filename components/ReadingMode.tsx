@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Book, ReadingSessionData, BookFormat } from '../types';
 import { BookOpen, X, Play, Pause, Square, CheckCircle2, Save, Edit3, Trash2, Delete, Trophy, Calendar, Clock, Zap, FileText, Smartphone, Headphones, Tablet, RefreshCw, Plus } from 'lucide-react';
-import { calculateProgress, formatTime, getRemainingTimeText, getBookPageTotal, FORMAT_LABELS } from '../utils';
+import { calculateProgress, formatTime, getRemainingTimeText, getBookPageTotal, FORMAT_LABELS, getLocalDateString, normalizeDateToYMD } from '../utils';
 import { useLibrary } from '../contexts/LibraryContext';
 import { BookCover } from './ui/BookCover';
 import { createClientId } from '../services/id';
@@ -56,8 +56,14 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
   const [numpadValue, setNumpadValue] = useState<string>('');
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [showRatingDialog, setShowRatingDialog] = useState(false);
-  const [tempRating, setTempRating] = useState<number>(10);
+  const [tempRating, setTempRating] = useState<number>(() => book.rating || 10);
   const [setupStep, setSetupStep] = useState<SetupStep>('none');
+
+  useEffect(() => {
+    if (book.rating) {
+      setTempRating(book.rating);
+    }
+  }, [book.rating]);
   const [tempFormat, setTempFormat] = useState<BookFormat | null>(null);
   const [tempPagesTotal, setTempPagesTotal] = useState<number>(book.pagesTotal || 0);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -239,7 +245,7 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
 
   const confirmSession = (finalPage: number) => {
     const pagesCount = Math.max(0, finalPage - session.startPage);
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const finalDuration = session.accumulatedTime;
     const currentCycle = book.currentCycleIndex || 0;
 
@@ -281,12 +287,13 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
     };
 
     if (isCompleted) {
-        const nowIso = new Date().toISOString();
-        updatedBook.completedAt = nowIso;
-        const prevCompletedDates = book.completedDates || [];
-        if (!prevCompletedDates.includes(nowIso)) {
-            updatedBook.completedDates = [...prevCompletedDates, nowIso];
+        const completionIso = new Date(today + 'T12:00:00.000Z').toISOString();
+        updatedBook.completedAt = completionIso;
+        if (!updatedBook.readingStartedAt) {
+          updatedBook.readingStartedAt = completionIso;
         }
+        const otherCycleDates = (book.completedDates || []).slice(0, currentCycle);
+        updatedBook.completedDates = [...otherCycleDates, completionIso];
     }
 
     updateBook(updatedBook);
@@ -294,14 +301,17 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
     setSession({ isActive: false, isPaused: false, startPage: 0, startTime: null, accumulatedTime: 0, displaySeconds: 0 });
     setNumpadMode(null);
 
-    if (isCompleted) setShowRatingDialog(true);
+    if (isCompleted) {
+      setTempRating(book.rating || 10);
+      setShowRatingDialog(true);
+    }
   };
 
   const handleAddSession = () => {
     const currentCycle = book.currentCycleIndex || 0;
     const newSession: ReadingSessionData = {
       id: createClientId(),
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDateString(),
       duration: 0,
       pages: 0,
       cycleIndex: currentCycle
@@ -326,17 +336,25 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
     
     const updates: Partial<Book> = { sessions: updatedSessions, pagesRead: totalRead };
     
-    if (isCompleted && book.status !== 'Completed') {
-        const nowIso = new Date().toISOString();
+    if (isCompleted || (book.status === 'Completed' && totalRead >= total)) {
+        const sortedByDate = [...currentSessions].sort((a, b) => (a.date > b.date ? 1 : -1));
+        const lastSession = sortedByDate[sortedByDate.length - 1] || currentSessions[currentSessions.length - 1];
+        const sessionDate = lastSession?.date || getLocalDateString();
+        const completionIso = new Date(sessionDate + 'T12:00:00.000Z').toISOString();
         updates.status = 'Completed';
-        updates.completedAt = nowIso;
-        const prevCompletedDates = book.completedDates || [];
-        if (!prevCompletedDates.includes(nowIso)) {
-            updates.completedDates = [...prevCompletedDates, nowIso];
+        updates.completedAt = completionIso;
+        if (!book.readingStartedAt && !updates.readingStartedAt) {
+          const firstSession = sortedByDate[0] || currentSessions[0];
+          const firstDate = firstSession?.date || sessionDate;
+          updates.readingStartedAt = new Date(firstDate + 'T12:00:00.000Z').toISOString();
         }
+        const otherCycleDates = (book.completedDates || []).slice(0, currentCycle);
+        updates.completedDates = [...otherCycleDates, completionIso];
     } else if (!isCompleted && book.status === 'Completed') {
         updates.status = 'Reading';
         updates.completedAt = undefined;
+        const otherCycleDates = (book.completedDates || []).slice(0, currentCycle);
+        updates.completedDates = otherCycleDates.length > 0 ? otherCycleDates : undefined;
     }
 
     updateBook({ ...book, ...updates });
@@ -358,12 +376,24 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
     const currentSessions = updatedSessions.filter(s => (s.cycleIndex || 0) === currentCycle);
     const totalRead = currentSessions.reduce((acc, s) => acc + (s.pages || 0), 0);
     const total = getBookPageTotal(book);
+    const isCompleted = total > 0 && totalRead >= total;
     
     const updatedBook: Book = { ...book, sessions: updatedSessions, pagesRead: totalRead };
     
-    if (book.status === 'Completed' && total > 0 && totalRead < total) {
+    if (isCompleted || (book.status === 'Completed' && totalRead >= total)) {
+        const sortedByDate = [...currentSessions].sort((a, b) => (a.date > b.date ? 1 : -1));
+        const lastSession = sortedByDate[sortedByDate.length - 1] || currentSessions[currentSessions.length - 1];
+        const sessionDate = lastSession?.date || getLocalDateString();
+        const completionIso = new Date(sessionDate + 'T12:00:00.000Z').toISOString();
+        updatedBook.status = 'Completed';
+        updatedBook.completedAt = completionIso;
+        const otherCycleDates = (book.completedDates || []).slice(0, currentCycle);
+        updatedBook.completedDates = [...otherCycleDates, completionIso];
+    } else if (book.status === 'Completed' && total > 0 && totalRead < total) {
         updatedBook.status = 'Reading';
         updatedBook.completedAt = undefined;
+        const otherCycleDates = (book.completedDates || []).slice(0, currentCycle);
+        updatedBook.completedDates = otherCycleDates.length > 0 ? otherCycleDates : undefined;
     }
     updateBook(updatedBook);
     setShowDeleteDialog(false);
@@ -378,17 +408,20 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
     const isCompleted = total > 0 && totalRead >= total;
     
     const updates: Partial<Book> = { pagesRead: totalRead };
-    if (isCompleted && book.status !== 'Completed') {
-        const nowIso = new Date().toISOString();
+    if (isCompleted || (book.status === 'Completed' && totalRead >= total)) {
+        const sortedByDate = [...currentSessions].sort((a, b) => (a.date > b.date ? 1 : -1));
+        const lastSession = sortedByDate[sortedByDate.length - 1] || currentSessions[currentSessions.length - 1];
+        const sessionDate = lastSession?.date || getLocalDateString();
+        const completionIso = new Date(sessionDate + 'T12:00:00.000Z').toISOString();
         updates.status = 'Completed';
-        updates.completedAt = nowIso;
-        const prevCompletedDates = book.completedDates || [];
-        if (!prevCompletedDates.includes(nowIso)) {
-            updates.completedDates = [...prevCompletedDates, nowIso];
-        }
+        updates.completedAt = completionIso;
+        const otherCycleDates = (book.completedDates || []).slice(0, currentCycle);
+        updates.completedDates = [...otherCycleDates, completionIso];
     } else if (!isCompleted && book.status === 'Completed') {
         updates.status = 'Reading';
         updates.completedAt = undefined;
+        const otherCycleDates = (book.completedDates || []).slice(0, currentCycle);
+        updates.completedDates = otherCycleDates.length > 0 ? otherCycleDates : undefined;
     }
     
     updateBook({ ...book, ...updates });
@@ -396,7 +429,12 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
   };
 
   const submitRatingAndFinish = () => {
-    updateBook({ ...book, rating: tempRating });
+    const latestBook = books.find(b => b.id === book.id) || book;
+    updateBook({
+      ...latestBook,
+      status: 'Completed',
+      rating: tempRating,
+    });
     setShowRatingDialog(false);
   };
 
@@ -608,9 +646,37 @@ export const ReadingMode: React.FC<ReadingModeProps> = ({ book: initialBook, onC
        {showRatingDialog && (
          <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-slate-900/90 backdrop-blur-xl">
             <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl flex flex-col items-center">
-               <Trophy size={48} className="text-emerald-500 mb-4" /><h3 className="text-2xl font-bold mb-2">Вітаємо!</h3><p className="text-gray-500 text-sm mb-8 text-center">Книга прочитана. Як вам вона?</p>
-               <div className="grid grid-cols-5 gap-2 mb-10">{[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (<button key={n} onClick={() => setTempRating(n)} className={`w-12 h-12 rounded-2xl text-sm font-bold transition-all ${tempRating === n ? 'bg-indigo-600 text-[#ffffff] shadow-lg' : 'bg-gray-50 text-gray-400'}`}>{n}</button>))}</div>
-               <button onClick={submitRatingAndFinish} className="w-full bg-indigo-600 text-[#ffffff] py-5 rounded-[2rem] font-bold shadow-xl active:scale-95">Завершити</button>
+               <Trophy size={48} className="text-emerald-500 mb-4" />
+               <h3 className="text-2xl font-bold mb-2">Вітаємо!</h3>
+               <p className="text-gray-500 text-sm mb-6 text-center">Книга прочитана. Як вам вона?</p>
+               <div className="grid grid-cols-5 gap-2 mb-8 w-full">
+                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
+                   <button 
+                     key={n} 
+                     type="button"
+                     onClick={() => setTempRating(n)} 
+                     className={`h-12 rounded-2xl text-sm font-bold transition-all ${tempRating === n ? 'bg-indigo-600 text-[#ffffff] shadow-lg shadow-indigo-200 scale-105' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+                   >
+                     {n}
+                   </button>
+                 ))}
+               </div>
+               <div className="flex gap-2 w-full">
+                 <button 
+                   type="button" 
+                   onClick={() => setShowRatingDialog(false)} 
+                   className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold text-sm hover:bg-gray-200 active:scale-95 transition-all"
+                 >
+                   Пізніше
+                 </button>
+                 <button 
+                   type="button" 
+                   onClick={submitRatingAndFinish} 
+                   className="flex-[2] bg-indigo-600 text-[#ffffff] py-4 rounded-2xl font-bold text-sm shadow-xl shadow-indigo-200 active:scale-95 transition-all"
+                 >
+                   Зберегти
+                 </button>
+               </div>
             </div>
          </div>
        )}

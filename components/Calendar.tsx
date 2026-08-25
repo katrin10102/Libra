@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Book } from '../types';
 import { ChevronLeft, ChevronRight, BookOpen, Calendar as CalendarIcon, Grid, Clock, FileText, Loader2 } from 'lucide-react';
 import { BookDetailsV2 } from './v2/BookDetailsV2';
@@ -8,7 +8,7 @@ import { ReadingMode } from './ReadingMode';
 import { useLibrary } from '../contexts/LibraryContext';
 import { useUI } from '../contexts/UIContext';
 import { useI18n } from '../contexts/I18nContext';
-import { formatTime } from '../utils';
+import { formatTime, normalizeDateToYMD } from '../utils';
 import { BookCover } from './ui/BookCover';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 
@@ -21,9 +21,14 @@ export const Calendar: React.FC = () => {
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('month');
-  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [selectedBookId, setSelectedBookId] = useState<string | null>(null);
   const [readingModeOpen, setReadingModeOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+
+  const selectedBook = useMemo(() => {
+    if (!selectedBookId) return null;
+    return books.find((b) => b.id === selectedBookId) || null;
+  }, [books, selectedBookId]);
 
   const uniquePublishers = React.useMemo(() => {
     const pubs = new Set<string>();
@@ -82,21 +87,38 @@ export const Calendar: React.FC = () => {
 
   const isBookReadInMonth = (book: Book, yearStr: number, monthIndex: number) => {
      const prefix = `${yearStr}-${String(monthIndex + 1).padStart(2, '0')}`;
-     const hasSession = book.sessions?.some(s => s.date.startsWith(prefix));
-     const completedInMonth = book.completedAt && book.completedAt.startsWith(prefix);
-     const completedDatesInMonth = book.completedDates?.some(d => d.startsWith(prefix));
-     return hasSession || completedInMonth || completedDatesInMonth;
+     const hasSession = book.sessions?.some(s => s.date && normalizeDateToYMD(s.date).startsWith(prefix));
+     const completedInMonth = book.completedAt && normalizeDateToYMD(book.completedAt).startsWith(prefix);
+     const completedDatesInMonth = book.completedDates?.some(d => d && normalizeDateToYMD(d).startsWith(prefix));
+     return !!(hasSession || completedInMonth || completedDatesInMonth);
   };
 
   const dailyReadingMap = useMemo(() => {
     const map: Record<string, Book[]> = {};
     const monthPrefix = `${year}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
 
+    const addBookToDate = (rawDate: string | undefined | null, book: Book) => {
+      const ymd = normalizeDateToYMD(rawDate);
+      if (ymd && ymd.startsWith(monthPrefix)) {
+        if (!map[ymd]) map[ymd] = [];
+        if (!map[ymd].some(b => b.id === book.id)) {
+          map[ymd].push(book);
+        }
+      }
+    };
+
     books.forEach(book => {
       book.sessions?.forEach(session => {
-        if (session.date.startsWith(monthPrefix)) {
-            if (!map[session.date]) map[session.date] = [];
-            if (!map[session.date].some(b => b.id === book.id)) map[session.date].push(book);
+        if (session.date) {
+          addBookToDate(session.date, book);
+        }
+      });
+      if (book.completedAt) {
+        addBookToDate(book.completedAt, book);
+      }
+      book.completedDates?.forEach(date => {
+        if (date) {
+          addBookToDate(date, book);
         }
       });
     });
@@ -138,13 +160,17 @@ export const Calendar: React.FC = () => {
     let activeBooks = new Set<string>();
     let bookList: Book[] = [];
 
-    if (viewMode === 'month' && !targetDateStr) {
-        // Month total
-        const monthPrefix = `${year}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-        books.forEach(b => {
-            let bookAdded = false;
+    const monthPrefix = `${year}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+    const yearPrefix = `${year}-`;
+
+    books.forEach(b => {
+        let bookAdded = false;
+
+        if (viewMode === 'month' && !targetDateStr) {
+            // Month total
             b.sessions?.forEach(s => {
-                if (s.date.startsWith(monthPrefix)) {
+                const sDate = normalizeDateToYMD(s.date);
+                if (sDate.startsWith(monthPrefix)) {
                     totalPages += Number(s.pages) || 0;
                     totalSeconds += Number(s.duration) || 0;
                     if (!bookAdded) {
@@ -154,30 +180,17 @@ export const Calendar: React.FC = () => {
                     }
                 }
             });
-        });
-    } else if (viewMode === 'month' && targetDateStr) {
-        // Specific day total
-        books.forEach(b => {
-             let bookAdded = false;
-             b.sessions?.forEach(s => {
-                 if (s.date === targetDateStr) {
-                     totalPages += Number(s.pages) || 0;
-                     totalSeconds += Number(s.duration) || 0;
-                     if (!bookAdded) {
-                        activeBooks.add(b.id);
-                        bookList.push(b);
-                        bookAdded = true;
-                     }
-                 }
-             });
-        });
-    } else {
-        // Year total
-        const yearPrefix = `${year}-`;
-        books.forEach(b => {
-            let bookAdded = false;
+            if (!bookAdded && isBookReadInMonth(b, year, currentDate.getMonth())) {
+                activeBooks.add(b.id);
+                bookList.push(b);
+            }
+        } else if (viewMode === 'month' && targetDateStr) {
+            // Specific day total
             b.sessions?.forEach(s => {
-                if (s.date.startsWith(yearPrefix)) {
+                const sDate = normalizeDateToYMD(s.date);
+                if (sDate === targetDateStr) {
+                    totalPages += Number(s.pages) || 0;
+                    totalSeconds += Number(s.duration) || 0;
                     if (!bookAdded) {
                         activeBooks.add(b.id);
                         bookList.push(b);
@@ -185,13 +198,43 @@ export const Calendar: React.FC = () => {
                     }
                 }
             });
-        });
-    }
+            if (!bookAdded) {
+                const compDate = normalizeDateToYMD(b.completedAt);
+                const hasCompDate = b.completedDates?.some(d => normalizeDateToYMD(d) === targetDateStr);
+                if (compDate === targetDateStr || hasCompDate) {
+                    activeBooks.add(b.id);
+                    bookList.push(b);
+                }
+            }
+        } else {
+            // Year total
+            b.sessions?.forEach(s => {
+                const sDate = normalizeDateToYMD(s.date);
+                if (sDate.startsWith(yearPrefix)) {
+                    totalPages += Number(s.pages) || 0;
+                    totalSeconds += Number(s.duration) || 0;
+                    if (!bookAdded) {
+                        activeBooks.add(b.id);
+                        bookList.push(b);
+                        bookAdded = true;
+                    }
+                }
+            });
+            if (!bookAdded) {
+                const compYear = normalizeDateToYMD(b.completedAt);
+                const hasCompYear = b.completedDates?.some(d => normalizeDateToYMD(d).startsWith(yearPrefix));
+                if (compYear.startsWith(yearPrefix) || hasCompYear) {
+                    activeBooks.add(b.id);
+                    bookList.push(b);
+                }
+            }
+        }
+    });
 
     return { 
         count: activeBooks.size, 
         pages: totalPages, 
-        time: totalSeconds,
+        time: totalSeconds, 
         list: bookList 
     };
   }, [books, viewMode, currentDate, year, selectedDay]);
@@ -386,10 +429,10 @@ export const Calendar: React.FC = () => {
                  </div>
               ) : (
                  <div className="grid grid-cols-1 gap-3">
-                     {visibleStatsBooks.map(book => (
+                      {visibleStatsBooks.map(book => (
                         <div 
                           key={book.id} 
-                          onClick={() => setSelectedBook(book)}
+                          onClick={() => setSelectedBookId(book.id)}
                           className="flex items-center gap-4 p-3 bg-gray-50/50 rounded-[1.5rem] group cursor-pointer active:scale-[0.98] transition-all hover:bg-indigo-50 border border-gray-100/50 hover:border-indigo-100 shadow-sm"
                         >
                           <div className="w-12 h-16 bg-white rounded-xl overflow-hidden flex-shrink-0 shadow-sm border border-gray-100 group-hover:scale-105 transition-transform">
@@ -422,7 +465,7 @@ export const Calendar: React.FC = () => {
         <div className="fixed inset-0 z-[60] bg-slate-50 animate-in slide-in-from-bottom duration-300">
           <BookDetailsV2 
             book={selectedBook}
-            onBack={() => setSelectedBook(null)}
+            onBack={() => setSelectedBookId(null)}
             onOpenReadingMode={() => setReadingModeOpen(true)}
             onEdit={() => setIsEditing(true)}
             onDelete={async () => {
@@ -437,7 +480,7 @@ export const Calendar: React.FC = () => {
               try {
                 deleteBook(selectedBook.id);
                 toast.show(t('library.bookDeleted'), 'success');
-                setSelectedBook(null);
+                setSelectedBookId(null);
               } catch (error) {
                 console.error(error);
                 toast.show(t('library.failedDelete'), 'error');
@@ -458,7 +501,6 @@ export const Calendar: React.FC = () => {
               try {
                 updateBook(updated);
                 toast.show(t('library.saved'), 'success');
-                setSelectedBook(updated);
                 setIsEditing(false);
               } catch (error) {
                 console.error(error);

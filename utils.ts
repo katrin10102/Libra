@@ -87,12 +87,99 @@ export const getRatingColor = (rating: number) => {
   return '#FFD700';
 };
 
+/**
+ * Normalizes any ISO string, date string, or YYYY-MM-DD to standard "YYYY-MM-DD".
+ */
+export const normalizeDateToYMD = (dateInput?: string | null): string => {
+  if (!dateInput) return '';
+  const trimmed = dateInput.trim();
+  if (trimmed.includes('T')) {
+    return trimmed.split('T')[0];
+  }
+  const parts = trimmed.split('-');
+  if (parts.length === 3) {
+    const y = parts[0];
+    const m = parts[1].padStart(2, '0');
+    const d = parts[2].padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return trimmed;
+};
+
+/**
+ * Returns today's local date (or given date) in YYYY-MM-DD format respecting device local time.
+ */
+export const getLocalDateString = (d: Date = new Date()): string => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export const calculateAverageSpeed = (book: Book) => {
   if (book.selectedReadingFormat === 'Audio') return 0;
   if (!book.sessions || book.sessions.length === 0) return 0;
   const totalPages = book.sessions.reduce((acc, s) => acc + Number(s.pages), 0);
   const totalSeconds = book.sessions.reduce((acc, s) => acc + Number(s.duration), 0);
   return totalSeconds > 0 ? Math.round(totalPages / (totalSeconds / 3600)) : 0;
+};
+
+/**
+ * Calculates the average reading duration in seconds per page across all books in the library.
+ * Defaults to 72 seconds/page (50 pages/hour) if no recorded reading history exists.
+ */
+export const calculateLibraryAverageSecondsPerPage = (books: Book[] = [], fallbackSecondsPerPage = 72): number => {
+  let totalPages = 0;
+  let totalDurationSeconds = 0;
+
+  books.forEach((book) => {
+    if (book.sessions && Array.isArray(book.sessions)) {
+      const isAudio = book.selectedReadingFormat === 'Audio';
+      book.sessions.forEach((session) => {
+        const pages = Number(session.pages) || 0;
+        const duration = Number(session.duration) || 0;
+        if (pages > 0 && duration > 0 && !isAudio && session.format !== 'Audio') {
+          totalPages += pages;
+          totalDurationSeconds += duration;
+        }
+      });
+    }
+  });
+
+  if (totalPages > 0 && totalDurationSeconds > 0) {
+    const avg = Math.round(totalDurationSeconds / totalPages);
+    return avg > 0 ? avg : fallbackSecondsPerPage;
+  }
+
+  return fallbackSecondsPerPage;
+};
+
+/**
+ * Determines the effective average reading time (in seconds per page) to use for a book:
+ * 1. If the book itself has reading sessions with positive duration, uses the book's average.
+ * 2. Otherwise, uses the library-wide average from all recorded reading sessions.
+ * 3. Falls back to default (72s/page) if no reading data is available.
+ */
+export const getEffectiveAverageSecondsPerPage = (book: Book, allBooks: Book[] = []): number => {
+  if (book.sessions && book.sessions.length > 0) {
+    const isAudio = book.selectedReadingFormat === 'Audio';
+    let bookPages = 0;
+    let bookDuration = 0;
+    book.sessions.forEach((session) => {
+      const p = Number(session.pages) || 0;
+      const d = Number(session.duration) || 0;
+      if (p > 0 && d > 0 && !isAudio && session.format !== 'Audio') {
+        bookPages += p;
+        bookDuration += d;
+      }
+    });
+    if (bookPages > 0 && bookDuration > 0) {
+      const bookAvg = Math.round(bookDuration / bookPages);
+      if (bookAvg > 0) return bookAvg;
+    }
+  }
+
+  return calculateLibraryAverageSecondsPerPage(allBooks);
 };
 
 export const calculateTotalReadingTime = (book: Book) => {

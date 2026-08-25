@@ -22,6 +22,7 @@ import {
   getBookPageTotal,
   getRatingColor,
   getSeasonColorClass,
+  normalizeDateToYMD,
   normalizeSeason,
 } from '../../utils';
 import { BookCover } from '../ui/BookCover';
@@ -41,6 +42,16 @@ interface BookDetailsV2Props {
 
 const formatDate = (value: string | undefined, locale: string, fallback: string): string => {
   if (!value) return fallback;
+  const ymd = normalizeDateToYMD(value);
+  if (ymd) {
+    const parts = ymd.split('-');
+    if (parts.length === 3) {
+      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      if (!Number.isNaN(d.getTime())) {
+        return d.toLocaleDateString(locale);
+      }
+    }
+  }
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return fallback;
   return parsed.toLocaleDateString(locale);
@@ -253,19 +264,32 @@ export const BookDetailsV2: React.FC<BookDetailsV2Props> = ({
             </div>
           </div>
 
-          {book.status === 'Completed' || (book.completedDates && book.completedDates.length > 0) ? (
+          {book.status === 'Completed' || (book.completedDates && book.completedDates.length > 0) || !!book.completedAt ? (
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100 flex flex-col items-center">
                 <CalendarIcon size={16} className="text-emerald-500 mb-1" />
                 <span className="text-[10px] font-bold text-emerald-400 uppercase text-center">{t('details.completed')}</span>
                 <div className="text-[11px] font-bold text-emerald-700 text-center flex flex-col gap-0.5 max-h-[60px] overflow-y-auto">
-                  {book.completedDates && book.completedDates.length > 0 ? (
-                    book.completedDates.map((date, idx) => (
+                  {(() => {
+                    const rawDates = (book.completedDates && book.completedDates.length > 1)
+                      ? book.completedDates
+                      : [book.completedAt || (book.completedDates && book.completedDates[0])].filter(Boolean) as string[];
+                    const uniqueDates: string[] = [];
+                    const seenYmd = new Set<string>();
+                    for (const d of rawDates) {
+                      const ymd = normalizeDateToYMD(d) || d;
+                      if (!seenYmd.has(ymd)) {
+                        seenYmd.add(ymd);
+                        uniqueDates.push(d);
+                      }
+                    }
+                    if (uniqueDates.length === 0 && book.completedAt) {
+                      uniqueDates.push(book.completedAt);
+                    }
+                    return uniqueDates.map((date, idx) => (
                       <div key={`${date}-${idx}`}>{formatDate(date, locale, fallback)}</div>
-                    ))
-                  ) : (
-                    <div>{formatDate(book.completedAt, locale, fallback)}</div>
-                  )}
+                    ));
+                  })()}
                 </div>
               </div>
               <div className="bg-indigo-50/50 p-3 rounded-2xl border border-indigo-100 flex flex-col items-center">

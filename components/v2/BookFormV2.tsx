@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Barcode, Camera, Image as ImageIcon, Keyboard, Loader2, Save, Wand2, Plus, Trash2 } from 'lucide-react';
 import { Book, BookFormat, BookStatus } from '../../types';
-import { FORMAT_LABELS, getSeasonColorClass, normalizeSeason, SEASON_OPTIONS } from '../../utils';
+import { FORMAT_LABELS, getSeasonColorClass, normalizeSeason, SEASON_OPTIONS, normalizeDateToYMD } from '../../utils';
 import { BookCover } from '../ui/BookCover';
 import { useI18n } from '../../contexts/I18nContext';
 import { MessageKey } from '../../i18n/messages';
@@ -75,7 +75,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
     completedAt: initialValue.completedAt,
     completedDates: (initialValue.completedDates || []).filter(d => {
       if (!initialValue.completedAt) return true;
-      return d.substring(0, 10) !== initialValue.completedAt.substring(0, 10);
+      return normalizeDateToYMD(d) !== normalizeDateToYMD(initialValue.completedAt);
     }),
     rating: initialValue.rating,
     addedAt: initialValue.addedAt || ((initialValue.status || allowedStatuses[0] || 'Unread') !== 'Wishlist' ? new Date().toISOString() : ''),
@@ -469,6 +469,17 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
 
     setIsSubmitting(true);
     try {
+      const finalCompletedAt = form.completedAt;
+      let finalCompletedDates: string[] | undefined = undefined;
+      if (finalCompletedAt) {
+        const otherDates = (form.completedDates || []).filter(
+          (d) => normalizeDateToYMD(d) !== normalizeDateToYMD(finalCompletedAt)
+        );
+        finalCompletedDates = [...otherDates, finalCompletedAt];
+      } else if (form.completedDates && form.completedDates.length > 0) {
+        finalCompletedDates = form.completedDates;
+      }
+
       onSubmit({
         ...form,
         title: titleValue,
@@ -483,8 +494,10 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
         pagesTotal: Math.max(0, Number(form.pagesTotal) || 0),
         formats: normalizeFormats(form.formats),
         seasons: normalizeSeasons(form.seasons),
+        completedAt: finalCompletedAt,
+        completedDates: finalCompletedDates,
         isbn: sanitizeText(form.isbn || '', 40).trim(),
-        timestamp: form.timestamp || new Date().toISOString()
+        timestamp: form.timestamp || new Date().toISOString(),
       });
     } finally {
       setIsSubmitting(false);
@@ -932,11 +945,16 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                     value={form.completedAt ? form.completedAt.substring(0, 10) : ''}
                     onChange={(e) => {
                       const val = e.target.value;
-                      const nextCompletedAt = val ? new Date(val).toISOString() : undefined;
+                      const nextCompletedAt = val ? new Date(val + 'T12:00:00.000Z').toISOString() : undefined;
                       setForm((prev) => {
-                        let updatedDates = prev.completedDates || [];
+                        let updatedDates = (prev.completedDates || []).filter(d => {
+                          if (prev.completedAt && normalizeDateToYMD(d) === normalizeDateToYMD(prev.completedAt)) {
+                            return false;
+                          }
+                          return true;
+                        });
                         if (nextCompletedAt) {
-                          updatedDates = updatedDates.filter(d => d.substring(0, 10) !== nextCompletedAt.substring(0, 10));
+                          updatedDates = [...updatedDates, nextCompletedAt];
                         }
                         return {
                           ...prev,

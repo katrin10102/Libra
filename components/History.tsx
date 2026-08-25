@@ -27,7 +27,7 @@ import {
 import { useLibrary } from '../contexts/LibraryContext';
 import { useI18n } from '../contexts/I18nContext';
 import { BookCover } from './ui/BookCover';
-import { getBookPageTotal } from '../utils';
+import { getBookPageTotal, normalizeDateToYMD } from '../utils';
 import { Book } from '../types';
 
 const getLabel = (key: string, lang: string) => {
@@ -239,12 +239,11 @@ export const History: React.FC = () => {
     const prefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     let count = 0;
     books.forEach(b => {
-      let isCompletedThisMonth = false;
-      if (b.completedDates && b.completedDates.length > 0) {
-        isCompletedThisMonth = b.completedDates.some(d => d.startsWith(prefix));
-      } else if (b.completedAt) {
-        isCompletedThisMonth = b.completedAt.startsWith(prefix);
-      }
+      const dates = b.completedDates && b.completedDates.length > 0 ? b.completedDates : (b.completedAt ? [b.completedAt] : []);
+      const isCompletedThisMonth = dates.some(d => {
+        const ymd = normalizeDateToYMD(d);
+        return ymd ? ymd.startsWith(prefix) : false;
+      });
       if (isCompletedThisMonth) count++;
     });
     return count;
@@ -255,12 +254,11 @@ export const History: React.FC = () => {
     const prefix = `${now.getFullYear()}-`;
     let count = 0;
     books.forEach(b => {
-      let isCompletedThisYear = false;
-      if (b.completedDates && b.completedDates.length > 0) {
-        isCompletedThisYear = b.completedDates.some(d => d.startsWith(prefix));
-      } else if (b.completedAt) {
-        isCompletedThisYear = b.completedAt.startsWith(prefix);
-      }
+      const dates = b.completedDates && b.completedDates.length > 0 ? b.completedDates : (b.completedAt ? [b.completedAt] : []);
+      const isCompletedThisYear = dates.some(d => {
+        const ymd = normalizeDateToYMD(d);
+        return ymd ? ymd.startsWith(prefix) : false;
+      });
       if (isCompletedThisYear) count++;
     });
     return count;
@@ -330,21 +328,19 @@ export const History: React.FC = () => {
     // 1. Completed books (including historical reading cycles)
     const completionEvents: { book: Book; completedAt: string; rating: number }[] = [];
     books.forEach(b => {
-      if (b.completedDates && b.completedDates.length > 0) {
-        b.completedDates.forEach(date => {
+      const dates = b.completedDates && b.completedDates.length > 0 ? b.completedDates : (b.completedAt ? [b.completedAt] : []);
+      const seenYmd = new Set<string>();
+      dates.forEach(date => {
+        const ymd = normalizeDateToYMD(date);
+        if (ymd && !seenYmd.has(ymd)) {
+          seenYmd.add(ymd);
           completionEvents.push({
             book: b,
             completedAt: date,
             rating: b.rating ?? 0
           });
-        });
-      } else if (b.completedAt) {
-        completionEvents.push({
-          book: b,
-          completedAt: b.completedAt,
-          rating: b.rating ?? 0
-        });
-      }
+        }
+      });
     });
 
     const completedBooks = completionEvents

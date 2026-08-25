@@ -20,9 +20,14 @@ export const ReadingList: React.FC<ReadingListProps> = ({ onToggleNav }) => {
   const { books, updateBook, deleteBook } = useLibrary();
   const { toast, confirm } = useUI();
   const { t } = useI18n();
-  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [selectedBookId, setSelectedBookId] = useState<string | null>(null);
   const [readingModeOpen, setReadingModeOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+
+  const selectedBook = React.useMemo(() => {
+    if (!selectedBookId) return null;
+    return books.find((b) => b.id === selectedBookId) || null;
+  }, [books, selectedBookId]);
 
   React.useEffect(() => {
     if (onToggleNav) {
@@ -57,7 +62,7 @@ export const ReadingList: React.FC<ReadingListProps> = ({ onToggleNav }) => {
     }
     const randomIndex = Math.floor(Math.random() * unreadPaperBooks.length);
     const randomBook = unreadPaperBooks[randomIndex];
-    setSelectedBook(randomBook);
+    setSelectedBookId(randomBook.id);
     setReadingModeOpen(false);
     setIsEditing(false);
   };
@@ -95,7 +100,7 @@ export const ReadingList: React.FC<ReadingListProps> = ({ onToggleNav }) => {
                   <div 
                     key={book.id}
                     onClick={() => {
-                      setSelectedBook(book);
+                      setSelectedBookId(book.id);
                       setReadingModeOpen(true);
                     }}
                     className="bg-white p-4 rounded-[2rem] shadow-sm border border-gray-100 flex gap-4 items-center active:scale-[0.98] transition-all cursor-pointer group relative"
@@ -103,7 +108,7 @@ export const ReadingList: React.FC<ReadingListProps> = ({ onToggleNav }) => {
                     <ActiveTimerBadge 
                       bookId={book.id} 
                       onClick={() => {
-                        setSelectedBook(book);
+                        setSelectedBookId(book.id);
                         setReadingModeOpen(true);
                       }}
                     />
@@ -161,7 +166,7 @@ export const ReadingList: React.FC<ReadingListProps> = ({ onToggleNav }) => {
         <div className="fixed inset-0 z-[60] bg-slate-50 animate-in slide-in-from-bottom duration-300">
           <BookDetailsV2 
             book={selectedBook}
-            onBack={() => setSelectedBook(null)}
+            onBack={() => setSelectedBookId(null)}
             onOpenReadingMode={() => setReadingModeOpen(true)}
             onEdit={() => setIsEditing(true)}
             onDelete={async () => {
@@ -176,7 +181,7 @@ export const ReadingList: React.FC<ReadingListProps> = ({ onToggleNav }) => {
               try {
                 deleteBook(selectedBook.id);
                 toast.show(t('library.bookDeleted'), 'success');
-                setSelectedBook(null);
+                setSelectedBookId(null);
               } catch (error) {
                 console.error(error);
                 toast.show(t('library.failedDelete'), 'error');
@@ -197,7 +202,6 @@ export const ReadingList: React.FC<ReadingListProps> = ({ onToggleNav }) => {
               try {
                 updateBook(updated);
                 toast.show(t('library.saved'), 'success');
-                setSelectedBook(updated);
                 setIsEditing(false);
               } catch (error) {
                 console.error(error);
@@ -214,7 +218,6 @@ export const ReadingList: React.FC<ReadingListProps> = ({ onToggleNav }) => {
           book={selectedBook}
           onClose={() => {
             setReadingModeOpen(false);
-            setSelectedBook(null);
           }}
         />
       )}

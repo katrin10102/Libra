@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowDownUp, ArrowUp, BarChart2, BookOpen, Filter, Plus, Search, X } from 'lucide-react';
 import { Book, BookFormat, BookStatus } from '../../types';
-import { getBookPageTotal, SEASON_OPTIONS, getSeasonColorClass, normalizeSeason } from '../../utils';
+import { getBookPageTotal, getEffectiveAverageSecondsPerPage, getLocalDateString, normalizeDateToYMD, SEASON_OPTIONS, getSeasonColorClass, normalizeSeason } from '../../utils';
 import { createClientId } from '../../services/id';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useUI } from '../../contexts/UIContext';
@@ -665,21 +665,45 @@ export const LibraryFlowV2: React.FC<LibraryFlowV2Props> = ({ onNavigateToReadin
         if (!finalBook.completedAt) {
           finalBook.completedAt = new Date().toISOString();
         }
-        const totalPages = getBookPageTotal(finalBook);
-        if ((!finalBook.pagesRead || finalBook.pagesRead < totalPages) && totalPages > 0) {
-          finalBook.pagesRead = totalPages;
+        if (!finalBook.readingStartedAt) {
+          finalBook.readingStartedAt = finalBook.completedAt;
         }
-        if ((!finalBook.sessions || finalBook.sessions.length === 0) && totalPages > 0) {
-          const durationSeconds = Math.round(totalPages * 72);
-          const dateStr = finalBook.completedAt.split('T')[0];
+        const targetDateStr = normalizeDateToYMD(finalBook.completedAt) || getLocalDateString();
+        const currentCycle = finalBook.currentCycleIndex || 0;
+        const otherCycleDates = (finalBook.completedDates || []).filter(
+          (d) => normalizeDateToYMD(d) !== targetDateStr
+        );
+        finalBook.completedDates = [...otherCycleDates, finalBook.completedAt];
+        const totalPages = getBookPageTotal(finalBook);
+        const existingSessions = finalBook.sessions || [];
+        const readPages = existingSessions.reduce((acc, s) => acc + (Number(s.pages) || 0), 0);
+        if (readPages < totalPages && totalPages > 0) {
+          const remainingPages = totalPages - readPages;
+          const avgSecondsPerPage = getEffectiveAverageSecondsPerPage(finalBook, books);
+          const durationSeconds = Math.round(remainingPages * avgSecondsPerPage);
           finalBook.sessions = [
+            ...existingSessions,
             {
               id: createClientId(),
-              date: dateStr,
+              date: targetDateStr,
               duration: durationSeconds,
-              pages: totalPages,
+              pages: remainingPages,
+              format: finalBook.selectedReadingFormat || finalBook.formats[0] || 'Paper',
+              cycleIndex: finalBook.currentCycleIndex || 0,
             },
           ];
+        } else if (existingSessions.length > 0) {
+          const currentCycle = finalBook.currentCycleIndex || 0;
+          const currentCycleSessions = existingSessions.filter(s => (s.cycleIndex || 0) === currentCycle);
+          if (currentCycleSessions.length > 0) {
+            const lastSession = currentCycleSessions[currentCycleSessions.length - 1];
+            if (lastSession.date !== targetDateStr) {
+              finalBook.sessions = existingSessions.map(s => s.id === lastSession.id ? { ...s, date: targetDateStr } : s);
+            }
+          }
+        }
+        if ((!finalBook.pagesRead || finalBook.pagesRead < totalPages) && totalPages > 0) {
+          finalBook.pagesRead = totalPages;
         }
       }
       try {

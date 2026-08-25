@@ -489,19 +489,24 @@ export class MBooksParser {
 }
 
 /**
- * Fetch HTML with multi-platform support:
- * 1. Capacitor Native App (iOS/Android) -> CapacitorHttp with browser headers
- * 2. Web Browser -> Direct fetch with proxy fallback
+ * Fetch HTML with robust multi-platform support:
+ * 1. Capacitor Native App (iOS/Android APK) -> CapacitorHttp with browser headers (bypasses CORS natively)
+ * 2. Web Browser (Dev/Preview/Production) -> Direct /api proxy with CORS proxy fallback
  */
 const fetchHtml = async (url: string): Promise<string> => {
   const browserHeaders = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile; rv:124.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,application/json,*/*;q=0.8',
     'Accept-Language': 'uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7',
     'Referer': 'https://mbooks.com.ua/'
   };
 
-  if (Capacitor.isNativePlatform()) {
+  // 1. Capacitor Native Platform (Android / iOS app)
+  const isNative =
+    (typeof Capacitor !== 'undefined' && (Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'web')) ||
+    (typeof (window as any)?.Capacitor !== 'undefined' && typeof (window as any)?.Capacitor?.isNativePlatform === 'function' && (window as any).Capacitor.isNativePlatform());
+
+  if (isNative) {
     let fullUrl = url;
     if (url.startsWith('/api/')) {
       fullUrl = url.replace(/^\/api\//, 'https://mbooks.com.ua/');
@@ -513,29 +518,25 @@ const fetchHtml = async (url: string): Promise<string> => {
       const response = await CapacitorHttp.get({
         url: fullUrl,
         headers: browserHeaders,
-        connectTimeout: 8000,
-        readTimeout: 8000
+        responseType: 'text',
+        connectTimeout: 10000,
+        readTimeout: 10000
       });
 
-      if (response.status && response.status >= 400) {
-        throw new Error(`HTTP ${response.status}`);
+      if (response && response.data) {
+        return typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
       }
-
-      if (typeof response.data === 'string') {
-        return response.data;
-      }
-      return JSON.stringify(response.data);
     } catch (e) {
-      console.warn('CapacitorHttp get failed for:', fullUrl, e);
-      throw e;
+      console.warn('CapacitorHttp native get failed for:', fullUrl, e);
     }
   }
 
-  // Web Browser / Dev / Preview execution
+  // 2. Web Browser (Dev / Preview / Production)
   if (url.startsWith('/api')) {
+    // 2.1 First try direct /api (works on Vite dev server and proxy backend)
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       const res = await fetch(url, {
         headers: {
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
@@ -548,7 +549,7 @@ const fetchHtml = async (url: string): Promise<string> => {
         const text = await res.text();
         // Check if response is NOT the app's SPA fallback HTML (index.html)
         const isSpaFallback =
-          (text.includes('<div id="root">') || (text.includes('src="/src/main.tsx"') || text.includes('src="/index.tsx"'))) &&
+          (text.includes('<div id="root">') || text.includes('src="/src/main.tsx"') || text.includes('src="/index.tsx"')) &&
           !text.includes('mbooks') &&
           !text.includes('megogo') &&
           !text.includes('data-cy');
@@ -561,28 +562,46 @@ const fetchHtml = async (url: string): Promise<string> => {
       console.warn('Direct /api relative fetch failed, trying CORS proxies...', e);
     }
 
-    // If relative /api was not routed (e.g. static hosting on GitHub Pages), try public CORS proxies with fast timeouts
+    // 2.2 If running on static hosting (GitHub Pages or Mobile browser), try public CORS proxies with fast timeouts
     const targetUrl = `https://mbooks.com.ua${url.replace(/^\/api/, '')}`;
-    const proxyUrls = [
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-      `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
-      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`
+    const proxyConfigs = [
+      {
+        url: `https://proxy.cors.sh/${targetUrl}`,
+        headers: { 'x-cors-grida-api-key': 'c734bbd8-4f15-4606-9216-9502b4fa3906' },
+        isJson: false
+      },
+      {
+        url: `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
+        headers: {},
+        isJson: true
+      },
+      {
+        url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
+        headers: {},
+        isJson: false
+      }
     ];
 
-    for (const pUrl of proxyUrls) {
+    for (const p of proxyConfigs) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
-        const pRes = await fetch(pUrl, { signal: controller.signal });
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const pRes = await fetch(p.url, { headers: p.headers, signal: controller.signal });
         clearTimeout(timeoutId);
         if (pRes.ok) {
-          const text = await pRes.text();
+          let text = '';
+          if (p.isJson) {
+            const j = await pRes.json();
+            text = j?.contents || '';
+          } else {
+            text = await pRes.text();
+          }
           if (text && text.length > 500 && !text.includes('id="root"')) {
             return text;
           }
         }
-      } catch (err) {
-        console.warn(`CORS proxy failed (${pUrl}):`, err);
+      } catch {
+        // proceed to next proxy
       }
     }
 

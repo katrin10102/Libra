@@ -98,7 +98,7 @@ export class MBooksParser {
       const titleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i) ||
                          html.match(/<title>([^<]+)<\/title>/i);
       if (titleMatch) {
-        result.title = titleMatch[1].split(' - ')[0].split(' | ')[0].replace(/^Книга\s+/i, '').trim();
+        result.title = titleMatch[1].replace(/<[^>]+>/g, '').trim();
       }
     }
 
@@ -129,14 +129,15 @@ export class MBooksParser {
     const pairRegex = /<span\s+[^>]*class="[^"]*opacity-70[^"]*"[^>]*>([^<]+)<\/span>\s*<\/div>\s*<div\s+[^>]*>\s*(?:<a\s+[^>]*>\s*)?<span\s+[^>]*>([\s\S]*?)<\/span>/gi;
     let matchPair;
     while ((matchPair = pairRegex.exec(html)) !== null) {
-      const label = matchPair[1].trim();
+      const label = matchPair[1].replace(/<[^>]+>/g, '').trim();
       const value = matchPair[2].replace(/<[^>]+>/g, '').trim();
-      
-      if (label.includes('Видавництво')) {
+
+      if (label.includes('Кількість сторінок')) {
+        const pages = parseInt(value, 10);
+        if (!isNaN(pages)) result.pages = pages;
+      } else if (label.includes('Видавництво')) {
         result.publisher = value;
-      } else if (label.includes('Кількість сторінок')) {
-        result.pages = parseInt(value, 10) || undefined;
-      } else if (label.includes('Серія автора')) {
+      } else if (label.includes('Серія автора') || label.includes('Серія')) {
         result.authorSeries = value;
       } else if (label.includes('Порядок у серії')) {
         result.orderInSeries = value;
@@ -176,24 +177,26 @@ export class MBooksParser {
       }
     }
 
-    if (!result.title) {
-      result.title = 'Невідома назва';
-    }
-    if (!result.coverImage) {
-      result.coverImage = '';
-    }
-
-    return result as ParsedBook;
+    return {
+      title: result.title || 'Невідома назва',
+      author: cleanAuthorString(result.author || '-'),
+      coverImage: result.coverImage || '',
+      authorSeries: result.authorSeries || '',
+      orderInSeries: result.orderInSeries || '',
+      pages: result.pages,
+      publisher: result.publisher || '',
+      isbn: result.isbn || '',
+      bookUrl: result.bookUrl || `https://mbooks.com.ua${cleanHref}`
+    };
   }
 
   /**
-   * Fallback Stage: Search in Google Books API by ISBN
+   * Fallback Stage 1: Search in Google Books API by ISBN
    */
   async searchGoogleBooks(isbn: string): Promise<ParsedBook | null> {
     const cleanIsbn = normalizeIsbn(isbn);
     if (!cleanIsbn) return null;
 
-    // Try isbn query first, then loose query
     const urls = [
       `https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanIsbn}`,
       `https://www.googleapis.com/books/v1/volumes?q=${cleanIsbn}`
@@ -210,7 +213,6 @@ export class MBooksParser {
         const volumeInfo = data.items[0].volumeInfo;
         if (!volumeInfo) continue;
         
-        // Extract ISBN
         let parsedIsbn = cleanIsbn;
         if (volumeInfo.industryIdentifiers) {
           const idObj = volumeInfo.industryIdentifiers.find((id: any) => id.type === 'ISBN_13') || 
@@ -220,14 +222,12 @@ export class MBooksParser {
           }
         }
 
-        // Extract high-quality cover if available
         let cover = '';
         if (volumeInfo.imageLinks) {
           cover = volumeInfo.imageLinks.thumbnail || volumeInfo.imageLinks.smallThumbnail || volumeInfo.imageLinks.medium || '';
           if (cover.startsWith('http:')) {
             cover = cover.replace('http:', 'https:');
           }
-          // Remove &edge=curl for cleaner flat cover
           cover = cover.replace('&edge=curl', '');
         }
 
@@ -333,9 +333,11 @@ export class MBooksParser {
   }
 
   /**
-   * Unified search method that tries mbooks.com.ua, and if that fails or returns nothing,
-   * falls back to Google Books API, and then to Open Library API.
-   * Also reports which stage it is currently executing via an optional onStep change handler.
+   * Unified search method that tries:
+   * 1. Server-side /api/lookup-isbn (instant fast lookup)
+   * 2. Direct MBooks parser
+   * 3. Google Books API
+   * 4. Open Library API
    */
   async searchWithFallback(
     isbn: string,
@@ -344,33 +346,44 @@ export class MBooksParser {
     const cleanIsbn = normalizeIsbn(isbn);
     if (!cleanIsbn) return null;
     
-    // Stage 1: Try MBooks parser
-    if (onStep) onStep(1); // Stage 1: Search book link on MBooks
+    if (onStep) onStep(1); // Крок 1: Пошук книги
+
+    // Method 1: Try unified server-side lookup endpoint
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(`/api/lookup-isbn?isbn=${encodeURIComponent(cleanIsbn)}`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data && json.data.title && json.data.title !== 'Невідома назва') {
+          if (onStep) onStep(2); // Отримання деталей
+          return json.data as ParsedBook;
+        }
+      }
+    } catch (e) {
+      console.warn('Direct /api/lookup-isbn failed, trying fallback parser chain...', e);
+    }
+
+    // Method 2: Direct MBooks parser (works on Capacitor Native apps or via proxy)
     try {
       const href = await this.searchByIsbn(cleanIsbn);
       if (href) {
-        if (onStep) onStep(2); // Stage 2: Retrieve details from MBooks
+        if (onStep) onStep(2);
         const book = await this.getBookDetails(href);
         if (book && book.title && book.title !== 'Невідома назва') {
           return book;
         }
       }
     } catch (e) {
-      console.warn('MBooks search failed, falling back to Google Books...', e);
+      console.warn('MBooks parser failed, falling back to Google Books...', e);
     }
 
-    // Stage 2 fallback: Try Google Books API
-    if (onStep) onStep(2); // Treat as stage 2 (fetching details)
-    try {
-      const gBook = await this.searchGoogleBooks(cleanIsbn);
-      if (gBook && gBook.title && gBook.title !== 'Невідома назва') {
-        return gBook;
-      }
-    } catch (e) {
-      console.warn('Google Books failed, falling back to Open Library...', e);
-    }
-
-    // Stage 3 fallback: Try Open Library API
+    // Method 3: Open Library API (direct fetch in browser or capacitor)
+    if (onStep) onStep(2);
     try {
       const olBook = await this.searchOpenLibrary(cleanIsbn);
       if (olBook && olBook.title && olBook.title !== 'Невідома назва') {
@@ -378,6 +391,16 @@ export class MBooksParser {
       }
     } catch (e) {
       console.warn('Open Library search failed:', e);
+    }
+
+    // Method 4: Google Books API
+    try {
+      const gBook = await this.searchGoogleBooks(cleanIsbn);
+      if (gBook && gBook.title && gBook.title !== 'Невідома назва') {
+        return gBook;
+      }
+    } catch (e) {
+      console.warn('Google Books failed:', e);
     }
 
     return null;
@@ -398,7 +421,6 @@ const fetchHtml = async (url: string): Promise<string> => {
   };
 
   if (Capacitor.isNativePlatform()) {
-    // Native mobile app: use CapacitorHttp to bypass CORS with proper browser headers
     let fullUrl = url;
     if (url.startsWith('/api/')) {
       fullUrl = url.replace(/^\/api\//, 'https://mbooks.com.ua/');
@@ -430,7 +452,6 @@ const fetchHtml = async (url: string): Promise<string> => {
 
   // Web Browser / PWA / Preview execution
   if (url.startsWith('/api')) {
-    // 1st: Try relative API route (handled by Vite proxy in dev/preview or backend server)
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 6000);
@@ -442,13 +463,17 @@ const fetchHtml = async (url: string): Promise<string> => {
       });
       clearTimeout(timeoutId);
       if (res.ok) {
-        return await res.text();
+        const text = await res.text();
+        // Check that response is not an index.html SPA fallback
+        if (text && !text.includes('id="root"') && !text.includes('<!doctype html>')) {
+          return text;
+        }
       }
     } catch (e) {
       console.warn('Direct /api relative fetch failed, trying CORS proxies...', e);
     }
 
-    // 2nd: If relative /api failed (e.g. running on mobile web or static deployment), try public CORS proxies
+    // If relative /api returned SPA index or failed, try public CORS proxies
     const targetUrl = `https://mbooks.com.ua${url.replace(/^\/api/, '')}`;
     const proxyUrls = [
       `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
@@ -459,7 +484,7 @@ const fetchHtml = async (url: string): Promise<string> => {
     for (const pUrl of proxyUrls) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         const pRes = await fetch(pUrl, { signal: controller.signal });
         clearTimeout(timeoutId);
         if (pRes.ok) {
@@ -476,10 +501,10 @@ const fetchHtml = async (url: string): Promise<string> => {
     throw new Error('All fetch methods for /api failed');
   }
 
-  // Direct absolute external URL (Google Books, Open Library)
+  // Direct absolute external URL (Open Library / Google Books)
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 7000);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
     const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
     if (!response.ok) {
@@ -487,73 +512,27 @@ const fetchHtml = async (url: string): Promise<string> => {
     }
     return await response.text();
   } catch (err) {
-    // If direct fetch fails (e.g. CORS on third-party URL), try proxy
-    try {
-      const pUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-      const pRes = await fetch(pUrl);
-      if (pRes.ok) return await pRes.text();
-    } catch (e) {
-      // ignore
-    }
     throw err;
   }
 };
 
-export const parserInstance = new MBooksParser(fetchHtml);
+export const cleanAuthorString = (authorStr?: string): string => {
+  if (!authorStr) return 'Невідомий автор';
+  const names = authorStr.split(/[,;\/&]/).map(s => s.trim()).filter(Boolean);
+  const filteredNames = names.filter(name => {
+    const lower = name.toLowerCase();
+    return (
+      !lower.includes('переклад') &&
+      !lower.includes('іллюстратор') &&
+      !lower.includes('редактор') &&
+      !lower.includes('дизайн') &&
+      !lower.includes('укладач') &&
+      !lower.includes('художник')
+    );
+  });
 
-export const cleanAuthorString = (authorStr: string | undefined): string => {
-  if (!authorStr) return '';
-  
-  // Replace HTML entities like &nbsp; and non-breaking spaces with standard space
-  const cleaned = authorStr
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/\u00A0/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-    
-  // Split by common separators (comma, semicolon)
-  const items = cleaned.split(/[,;]/);
-  const uniqueNames: string[] = [];
-  const normalizedSet = new Set<string>();
-  
-  for (const item of items) {
-    const trimmed = item.replace(/<[^>]+>/g, '').trim();
-    if (!trimmed) continue;
-    
-    // Normalize to check for duplicate entries regardless of subtle case, punctuation or invisible formatting
-    const normalized = trimmed.toLowerCase()
-      .replace(/[\s\p{Punctuation}]/gu, '')
-      .replace(/\uFE0F/g, ''); // strip emoji variant selector
-      
-    if (normalized && !normalizedSet.has(normalized)) {
-      normalizedSet.add(normalized);
-      uniqueNames.push(trimmed);
-    }
-  }
-  
-  // Deduplicate case where one name is just another name with a leading character (e.g. avatar letter prefix "М" + "Мосян Тонсьов")
-  const filteredNames: string[] = [];
-  for (let i = 0; i < uniqueNames.length; i++) {
-    const current = uniqueNames[i];
-    const currentNorm = current.toLowerCase().replace(/[\s\p{Punctuation}]/gu, '').replace(/\uFE0F/g, '');
-    
-    let isDuplicated = false;
-    for (let j = 0; j < uniqueNames.length; j++) {
-      if (i === j) continue;
-      const other = uniqueNames[j];
-      const otherNorm = other.toLowerCase().replace(/[\s\p{Punctuation}]/gu, '').replace(/\uFE0F/g, '');
-      
-      if (currentNorm.endsWith(otherNorm) && currentNorm.length > otherNorm.length && currentNorm.length <= otherNorm.length + 2) {
-        isDuplicated = true;
-        break;
-      }
-    }
-    if (!isDuplicated) {
-      filteredNames.push(current);
-    }
-  }
-  
+  if (filteredNames.length === 0) return authorStr.trim();
   return filteredNames.join(', ');
 };
 
-
+export const parserInstance = new MBooksParser(fetchHtml);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Barcode, Camera, Image as ImageIcon, Keyboard, Loader2, Wand2 } from 'lucide-react';
+import { ArrowLeft, Barcode, Camera, Image as ImageIcon, Keyboard, Loader2, Wand2, Upload } from 'lucide-react';
 import { Book } from '../../types';
 import { createClientId } from '../../services/id';
 import { BookCover } from '../ui/BookCover';
@@ -8,7 +8,12 @@ import { fetchBookCover } from '../../services/storageService';
 import { useUI } from '../../contexts/UIContext';
 import { normalizeIsbn } from '../../utils';
 import { cleanAuthorString, parserInstance } from '../../services/MBooksParser';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import {
+  decodeBarcodeFromFile,
+  getNativeBarcodeDetector,
+  decodeCanvasWithZXing,
+  cleanBarcodeResult
+} from '../../services/BarcodeScannerService';
 
 interface AddWishlistV2Props {
   onAdd: (book: Book) => void;
@@ -40,7 +45,11 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
   const [activeMode, setActiveMode] = React.useState<'manual' | 'scan'>('manual');
   const [scanError, setScanError] = React.useState<string | null>(null);
   const barcodePhotoInputRef = React.useRef<HTMLInputElement>(null);
-  const html5QrCodeRef = React.useRef<Html5Qrcode | null>(null);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const mediaStreamRef = React.useRef<MediaStream | null>(null);
+  const animFrameRef = React.useRef<number | null>(null);
+  const [isPhotoScanning, setIsPhotoScanning] = React.useState(false);
 
   const triggerIsbnSearch = async (rawIsbn: string) => {
     const cleanIsbn = normalizeIsbn(rawIsbn);
@@ -91,166 +100,164 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
   const handleBarcodePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setIsPhotoScanning(true);
     try {
       toast.show(t('app.loading'), 'info');
-      const tempId = "temp-photo-scanner-wishlist";
-      let tempElem = document.getElementById(tempId);
-      if (!tempElem) {
-        tempElem = document.createElement("div");
-        tempElem.id = tempId;
-        tempElem.style.display = "none";
-        document.body.appendChild(tempElem);
-      }
-      const photoScanner = new Html5Qrcode(tempId, {
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39
-        ],
-        verbose: false
-      });
-      const decodedText = await photoScanner.scanFile(file, true);
-      photoScanner.clear();
-      if (decodedText) {
+      const detected = await decodeBarcodeFromFile(file);
+      if (detected) {
         if (navigator.vibrate) {
           try { navigator.vibrate(100); } catch {}
         }
-        const cleaned = normalizeIsbn(decodedText) || decodedText;
+        const cleaned = normalizeIsbn(detected) || detected;
         toast.show(`${t('bookForm.isbnFound')}: ${cleaned}`, 'success');
         setIsbnInput(cleaned);
         setActiveMode('manual');
         triggerIsbnSearch(cleaned);
+      } else {
+        toast.show(t('bookForm.isbnScanPhotoError'), 'error');
       }
     } catch (err) {
       console.error("Barcode photo scan error:", err);
       toast.show(t('bookForm.isbnScanPhotoError'), 'error');
     } finally {
+      setIsPhotoScanning(false);
       e.target.value = '';
     }
   };
 
   React.useEffect(() => {
-    if (!showIsbnModal || activeMode !== 'scan') return;
+    if (!showIsbnModal || activeMode !== 'scan') {
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((t) => {
+          try { t.stop(); } catch {}
+        });
+        mediaStreamRef.current = null;
+      }
+      return;
+    }
 
-    let html5QrCode: Html5Qrcode | null = null;
-    const elementId = "wishlist-scanner-reader";
     setScanError(null);
     let isMounted = true;
 
-    const timer = setTimeout(async () => {
-      if (!isMounted) return;
-
+    const startCamera = async () => {
       try {
-        const element = document.getElementById(elementId);
-        if (!element) {
-          console.error("Scanner element not found");
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+
+        if (!isMounted) {
+          stream.getTracks().forEach((t) => t.stop());
           return;
         }
 
-        html5QrCode = new Html5Qrcode(elementId, {
-          formatsToSupport: [
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.CODE_39
-          ],
-          verbose: false
-        });
-        html5QrCodeRef.current = html5QrCode;
+        mediaStreamRef.current = stream;
+        const video = videoRef.current;
+        if (!video) return;
 
-        // Camera resolution & device selection for iOS WebKit & Android
-        let cameraConfig: any = { facingMode: "environment" };
-        try {
-          const devices = await Html5Qrcode.getCameras();
-          if (devices && devices.length > 0) {
-            // Find back camera by label or fallback to last camera in list
-            const backCam = devices.find(d => /back|rear|environment|0/i.test(d.label)) || devices[devices.length - 1];
-            if (backCam && backCam.id) {
-              cameraConfig = backCam.id;
-            }
+        video.srcObject = stream;
+        video.setAttribute('playsinline', 'true');
+        video.setAttribute('webkit-playsinline', 'true');
+        video.muted = true;
+        await video.play();
+
+        const nativeDetector = await getNativeBarcodeDetector();
+        const canvas = canvasRef.current || document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        let frameCount = 0;
+
+        const scanLoop = async () => {
+          if (!isMounted || !video || video.readyState < 2) {
+            if (isMounted) animFrameRef.current = requestAnimationFrame(scanLoop);
+            return;
           }
-        } catch (camErr) {
-          console.warn("Could not enumerate cameras, falling back to facingMode:", camErr);
-        }
 
-        if (!isMounted) return;
+          frameCount++;
 
-        await html5QrCode.start(
-          cameraConfig,
-          {
-            fps: 10,
-            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-              const w = Math.min(Math.round(viewfinderWidth * 0.9), 360);
-              const h = Math.min(Math.round(viewfinderHeight * 0.45), 180);
-              return {
-                width: Math.max(w, 220),
-                height: Math.max(h, 90)
-              };
-            },
-            videoConstraints: {
-              facingMode: "environment",
-              width: { ideal: 1280 },
-              height: { ideal: 720 }
-            },
-            experimentalFeatures: {
-              useBarCodeDetectorIfSupported: false // Required for iOS WebKit stability
-            }
-          } as any,
-          (decodedText) => {
-            if (navigator.vibrate) {
-              try { navigator.vibrate(100); } catch {}
-            }
-            const cleaned = normalizeIsbn(decodedText) || decodedText;
-            toast.show(`${t('bookForm.isbnFound')}: ${cleaned}`, 'success');
-            setIsbnInput(cleaned);
-            setActiveMode('manual');
-            triggerIsbnSearch(cleaned);
-          },
-          () => {
-            // Uncritical stream scanning callbacks
+          // 1. Hardware accelerated native BarcodeDetector on iOS / Android
+          if (nativeDetector) {
+            try {
+              const results = await nativeDetector.detect(video);
+              if (results && results.length > 0) {
+                for (const item of results) {
+                  const code = cleanBarcodeResult(item.rawValue);
+                  if (code && (code.length === 10 || code.length === 13 || code.length >= 8)) {
+                    if (navigator.vibrate) { try { navigator.vibrate(100); } catch {} }
+                    const cleaned = normalizeIsbn(code) || code;
+                    toast.show(`${t('bookForm.isbnFound')}: ${cleaned}`, 'success');
+                    setIsbnInput(cleaned);
+                    setActiveMode('manual');
+                    triggerIsbnSearch(cleaned);
+                    return;
+                  }
+                }
+              }
+            } catch {}
           }
-        );
 
-        // iOS Safari video inline rendering safeguards
-        const videoEl = element.querySelector('video');
-        if (videoEl) {
-          videoEl.setAttribute('playsinline', 'true');
-          videoEl.setAttribute('webkit-playsinline', 'true');
-          videoEl.muted = true;
-          videoEl.play().catch(() => {});
-        }
+          // 2. High-speed canvas ZXing pass (every 3 frames)
+          if (frameCount % 3 === 0 && ctx) {
+            try {
+              const vw = video.videoWidth || 640;
+              const vh = video.videoHeight || 480;
+              const targetW = 640;
+              const targetH = Math.round((vh / vw) * 640);
+              if (canvas.width !== targetW || canvas.height !== targetH) {
+                canvas.width = targetW;
+                canvas.height = targetH;
+              }
+              ctx.drawImage(video, 0, 0, targetW, targetH);
+              const zxRes = decodeCanvasWithZXing(canvas);
+              if (zxRes) {
+                const code = cleanBarcodeResult(zxRes);
+                if (code && (code.length === 10 || code.length === 13 || code.length >= 8)) {
+                  if (navigator.vibrate) { try { navigator.vibrate(100); } catch {} }
+                  const cleaned = normalizeIsbn(code) || code;
+                  toast.show(`${t('bookForm.isbnFound')}: ${cleaned}`, 'success');
+                  setIsbnInput(cleaned);
+                  setActiveMode('manual');
+                  triggerIsbnSearch(cleaned);
+                  return;
+                }
+              }
+            } catch {}
+          }
 
-        if (!isMounted && html5QrCode) {
-          html5QrCode.stop().then(() => {
-            html5QrCode?.clear();
-          }).catch((err) => {
-            console.error("Clean up stop failed after delayed start:", err);
-          });
-        }
+          if (isMounted) {
+            animFrameRef.current = requestAnimationFrame(scanLoop);
+          }
+        };
+
+        animFrameRef.current = requestAnimationFrame(scanLoop);
       } catch (err) {
-        console.error("Scanner startup issue:", err);
+        console.error('Camera startup error:', err);
         if (isMounted) {
           setScanError(t('bookForm.isbnScanError'));
         }
       }
-    }, 100);
+    };
+
+    startCamera();
 
     return () => {
       isMounted = false;
-      clearTimeout(timer);
-      if (html5QrCode) {
-        if (html5QrCode.isScanning) {
-          html5QrCode.stop().then(() => {
-            html5QrCode?.clear();
-          }).catch((err) => {
-            console.error("Failed to stop scanner on clean up:", err);
-          });
-        }
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((t) => {
+          try { t.stop(); } catch {}
+        });
+        mediaStreamRef.current = null;
       }
     };
   }, [showIsbnModal, activeMode]);
@@ -461,20 +468,35 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
                     </form>
                   ) : (
                     <div className="space-y-4">
-                      <div className="relative aspect-square max-h-[320px] mx-auto w-full rounded-2xl overflow-hidden bg-black border border-gray-100 flex items-center justify-center">
-                        <div id="wishlist-scanner-reader" className="absolute inset-0 w-full h-full" />
-                        
+                      <div className="relative min-h-[240px] max-h-[300px] aspect-[4/3] mx-auto w-full rounded-2xl overflow-hidden bg-black border border-gray-100 flex flex-col items-center justify-center">
+                        <video
+                          ref={videoRef}
+                          playsInline
+                          webkit-playsinline="true"
+                          muted
+                          autoPlay
+                          className="w-full h-full object-cover"
+                        />
+                        <canvas ref={canvasRef} className="hidden" />
+
                         {activeMode === 'scan' && !scanError && (
-                          <div className="absolute inset-x-4 top-1/2 h-0.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] pointer-events-none z-10" 
-                               style={{ animation: 'scanLaser 2.5s linear infinite' }} />
+                          <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-4">
+                            <div className="relative w-[85%] h-[45%] rounded-2xl border-2 border-indigo-400/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)] flex items-center justify-center">
+                              <div className="absolute -top-1 -left-1 w-4 h-4 border-t-4 border-l-4 border-indigo-500 rounded-tl" />
+                              <div className="absolute -top-1 -right-1 w-4 h-4 border-t-4 border-r-4 border-indigo-500 rounded-tr" />
+                              <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-4 border-l-4 border-indigo-500 rounded-bl" />
+                              <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-4 border-r-4 border-indigo-500 rounded-br" />
+                              <div className="w-full h-0.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" />
+                            </div>
+                          </div>
                         )}
 
                         {scanError && (
                           <div className="absolute inset-0 p-4 bg-gray-950/95 flex flex-col items-center justify-center text-center gap-2 z-20">
                             <Camera size={32} className="text-red-400 animate-pulse" />
-                            <p className="text-xs font-bold text-red-150 px-4 leading-normal text-red-300">{scanError}</p>
-                            <button 
-                              type="button" 
+                            <p className="text-xs font-bold text-red-300 px-4 leading-normal">{scanError}</p>
+                            <button
+                              type="button"
                               onClick={() => {
                                 setActiveMode('manual');
                                 setScanError(null);
@@ -498,11 +520,21 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
 
                       <button
                         type="button"
+                        disabled={isPhotoScanning}
                         onClick={() => barcodePhotoInputRef.current?.click()}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 font-bold text-xs rounded-xl active:scale-95 transition-all shadow-sm"
+                        className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 font-bold text-xs rounded-xl active:scale-95 transition-all shadow-sm"
                       >
-                        <Camera size={16} className="text-indigo-600" />
-                        <span>{t('bookForm.isbnScanPhoto')}</span>
+                        {isPhotoScanning ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin text-indigo-600" />
+                            <span>{t('app.loading')}...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Camera size={16} className="text-indigo-600" />
+                            <span>{t('bookForm.isbnScanPhoto')}</span>
+                          </>
+                        )}
                       </button>
 
                       <p className="text-[11px] font-bold text-gray-400 text-center uppercase tracking-wide">

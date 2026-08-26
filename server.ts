@@ -212,10 +212,10 @@ app.get('/api/lookup-isbn', async (req, res) => {
   return res.status(404).json({ success: false, message: 'Book not found' });
 });
 
-// Proxy for mbooks if needed
+// Proxy for mbooks search and book detail
 app.get('/api/search', async (req, res) => {
   try {
-    const query = req.query.query as string || '';
+    const query = (req.query.query as string) || '';
     const response = await fetch(`https://mbooks.com.ua/search/?query=${encodeURIComponent(query)}`, {
       headers: BROWSER_HEADERS
     });
@@ -227,9 +227,9 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-app.get('/api/book/{*slug}', async (req, res) => {
+app.use('/api/book', async (req, res) => {
   try {
-    const slug = (req.params as any).slug || '';
+    const slug = req.url.replace(/^\//, '');
     const response = await fetch(`https://mbooks.com.ua/book/${slug}`, {
       headers: BROWSER_HEADERS
     });
@@ -238,6 +238,22 @@ app.get('/api/book/{*slug}', async (req, res) => {
     res.send(text);
   } catch (e: any) {
     res.status(500).send(e.message || 'Proxy book error');
+  }
+});
+
+// Universal fallback proxy for static clients
+app.get('/api/proxy', async (req, res) => {
+  try {
+    const target = req.query.url as string;
+    if (!target || (!target.startsWith('https://mbooks.com.ua') && !target.startsWith('https://openlibrary.org'))) {
+      return res.status(400).send('Invalid target URL');
+    }
+    const response = await fetch(target, { headers: BROWSER_HEADERS });
+    const text = await response.text();
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(text);
+  } catch (e: any) {
+    res.status(500).send(e.message || 'Proxy error');
   }
 });
 

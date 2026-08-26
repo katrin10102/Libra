@@ -439,8 +439,9 @@ export class MBooksParser {
 
   /**
    * Unified search method:
-   * 1. Direct MBooks search (instant via Capacitor on mobile or Vite proxy in dev/preview)
-   * 2. Parallel fallback to Google Books, Open Library, iTunes
+   * 1. Fast server lookup endpoint (/api/lookup-isbn) when backend is available
+   * 2. Direct client-side MBooks search & detail parsing (works on Native Android/iOS via CapacitorHttp and Web via proxy)
+   * 3. Parallel fallback to Open Library, Google Books, and Apple Books
    */
   async searchWithFallback(
     isbn: string,
@@ -451,7 +452,26 @@ export class MBooksParser {
 
     if (onStep) onStep(1); // Крок 1: Пошук посилання / книги
 
-    // Stage 1: Try MBooks
+    // Tier 1: Server-side unified lookup (fastest & most reliable when backend is present)
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(`/api/lookup-isbn?isbn=${encodeURIComponent(cleanIsbn)}`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data && json.data.title && json.data.title !== 'Невідома назва') {
+          return json.data;
+        }
+      }
+    } catch {
+      // Backend not reached or static site, proceed to client-side parsing
+    }
+
+    // Tier 2: Client-side MBooks search and extraction
     try {
       const href = await this.searchByIsbn(cleanIsbn);
       if (href) {
@@ -462,16 +482,16 @@ export class MBooksParser {
         }
       }
     } catch (e) {
-      console.warn('MBooks parser failed, proceeding to fallback providers...', e);
+      console.warn('MBooks client parser failed, proceeding to fallback providers...', e);
     }
 
-    // Stage 2: Parallel search across Google Books, Open Library, iTunes
+    // Tier 3: Parallel search across Open Library, Google Books, iTunes
     if (onStep) onStep(2); // Крок 2: Отримання деталей книги
 
     try {
       const results = await Promise.allSettled([
-        this.searchGoogleBooks(cleanIsbn),
         this.searchOpenLibrary(cleanIsbn),
+        this.searchGoogleBooks(cleanIsbn),
         this.searchITunes(cleanIsbn),
       ]);
 
@@ -491,7 +511,7 @@ export class MBooksParser {
 /**
  * Fetch HTML with robust multi-platform support:
  * 1. Capacitor Native App (iOS/Android APK) -> CapacitorHttp with browser headers (bypasses CORS natively)
- * 2. Web Browser (Dev/Preview/Production) -> Direct /api proxy with CORS proxy fallback
+ * 2. Web Browser (Dev/Preview/Production) -> Direct /api proxy with server fallback
  */
 const fetchHtml = async (url: string): Promise<string> => {
   const browserHeaders = {
@@ -533,10 +553,10 @@ const fetchHtml = async (url: string): Promise<string> => {
 
   // 2. Web Browser (Dev / Preview / Production)
   if (url.startsWith('/api')) {
-    // 2.1 First try direct /api (works on Vite dev server and proxy backend)
+    // 2.1 First try direct relative /api (works on server backend)
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
       const res = await fetch(url, {
         headers: {
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
@@ -547,7 +567,6 @@ const fetchHtml = async (url: string): Promise<string> => {
 
       if (res.ok) {
         const text = await res.text();
-        // Check if response is NOT the app's SPA fallback HTML (index.html)
         const isSpaFallback =
           (text.includes('<div id="root">') || text.includes('src="/src/main.tsx"') || text.includes('src="/index.tsx"')) &&
           !text.includes('mbooks') &&
@@ -559,51 +578,37 @@ const fetchHtml = async (url: string): Promise<string> => {
         }
       }
     } catch (e) {
-      console.warn('Direct /api relative fetch failed, trying CORS proxies...', e);
+      console.warn('Direct /api relative fetch failed:', e);
     }
 
-    // 2.2 If running on static hosting (GitHub Pages or Mobile browser), try public CORS proxies with fast timeouts
+    // 2.2 Try universal backend proxy
     const targetUrl = `https://mbooks.com.ua${url.replace(/^\/api/, '')}`;
-    const proxyConfigs = [
-      {
-        url: `https://proxy.cors.sh/${targetUrl}`,
-        headers: { 'x-cors-grida-api-key': 'c734bbd8-4f15-4606-9216-9502b4fa3906' },
-        isJson: false
-      },
-      {
-        url: `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
-        headers: {},
-        isJson: true
-      },
-      {
-        url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
-        headers: {},
-        isJson: false
-      }
-    ];
-
-    for (const p of proxyConfigs) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
-        const pRes = await fetch(p.url, { headers: p.headers, signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (pRes.ok) {
-          let text = '';
-          if (p.isJson) {
-            const j = await pRes.json();
-            text = j?.contents || '';
-          } else {
-            text = await pRes.text();
-          }
-          if (text && text.length > 500 && !text.includes('id="root"')) {
-            return text;
-          }
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(`/api/proxy?url=${encodeURIComponent(targetUrl)}`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const text = await res.text();
+        if (text && text.length > 300 && !text.includes('id="root"')) {
+          return text;
         }
-      } catch {
-        // proceed to next proxy
       }
-    }
+    } catch {}
+
+    // 2.3 Try direct fetch (if CORS allowed or WebView mode)
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch(targetUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const text = await res.text();
+        if (text && text.length > 300) return text;
+      }
+    } catch {}
 
     throw new Error('All fetch methods for /api failed');
   }

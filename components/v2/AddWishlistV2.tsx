@@ -39,6 +39,8 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
   const [isbnStep, setIsbnStep] = React.useState<number | null>(null);
   const [activeMode, setActiveMode] = React.useState<'manual' | 'scan'>('manual');
   const [scanError, setScanError] = React.useState<string | null>(null);
+  const barcodePhotoInputRef = React.useRef<HTMLInputElement>(null);
+  const html5QrCodeRef = React.useRef<Html5Qrcode | null>(null);
 
   const triggerIsbnSearch = async (rawIsbn: string) => {
     const cleanIsbn = normalizeIsbn(rawIsbn);
@@ -86,15 +88,68 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
     triggerIsbnSearch(isbnInput);
   };
 
+  const handleBarcodePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      toast.show(t('app.loading'), 'info');
+      const tempId = "temp-photo-scanner-wishlist";
+      let tempElem = document.getElementById(tempId);
+      if (!tempElem) {
+        tempElem = document.createElement("div");
+        tempElem.id = tempId;
+        tempElem.style.display = "none";
+        document.body.appendChild(tempElem);
+      }
+      const photoScanner = new Html5Qrcode(tempId, {
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39
+        ],
+        verbose: false
+      });
+      const decodedText = await photoScanner.scanFile(file, true);
+      photoScanner.clear();
+      if (decodedText) {
+        if (navigator.vibrate) {
+          try { navigator.vibrate(100); } catch {}
+        }
+        const cleaned = normalizeIsbn(decodedText) || decodedText;
+        toast.show(`${t('bookForm.isbnFound')}: ${cleaned}`, 'success');
+        setIsbnInput(cleaned);
+        setActiveMode('manual');
+        triggerIsbnSearch(cleaned);
+      }
+    } catch (err) {
+      console.error("Barcode photo scan error:", err);
+      toast.show(t('bookForm.isbnScanPhotoError'), 'error');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
   React.useEffect(() => {
     if (!showIsbnModal || activeMode !== 'scan') return;
 
     let html5QrCode: Html5Qrcode | null = null;
     const elementId = "wishlist-scanner-reader";
     setScanError(null);
+    let isMounted = true;
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
+      if (!isMounted) return;
+
       try {
+        const element = document.getElementById(elementId);
+        if (!element) {
+          console.error("Scanner element not found");
+          return;
+        }
+
         html5QrCode = new Html5Qrcode(elementId, {
           formatsToSupport: [
             Html5QrcodeSupportedFormats.EAN_13,
@@ -106,26 +161,49 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
           ],
           verbose: false
         });
-        html5QrCode.start(
-          { facingMode: "environment" },
+        html5QrCodeRef.current = html5QrCode;
+
+        // Camera resolution & device selection for iOS WebKit & Android
+        let cameraConfig: any = { facingMode: "environment" };
+        try {
+          const devices = await Html5Qrcode.getCameras();
+          if (devices && devices.length > 0) {
+            // Find back camera by label or fallback to last camera in list
+            const backCam = devices.find(d => /back|rear|environment|0/i.test(d.label)) || devices[devices.length - 1];
+            if (backCam && backCam.id) {
+              cameraConfig = backCam.id;
+            }
+          }
+        } catch (camErr) {
+          console.warn("Could not enumerate cameras, falling back to facingMode:", camErr);
+        }
+
+        if (!isMounted) return;
+
+        await html5QrCode.start(
+          cameraConfig,
           {
-            fps: 15,
-            qrbox: (w, h) => {
-              const width = w || 640;
-              const height = h || 480;
-              const size = Math.min(width, height);
+            fps: 10,
+            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+              const w = Math.min(Math.round(viewfinderWidth * 0.9), 360);
+              const h = Math.min(Math.round(viewfinderHeight * 0.45), 180);
               return {
-                width: Math.min(size * 0.85, 280),
-                height: Math.min(size * 0.35, 100)
+                width: Math.max(w, 220),
+                height: Math.max(h, 90)
               };
             },
             videoConstraints: {
-              facingMode: "environment"
+              facingMode: "environment",
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            },
+            experimentalFeatures: {
+              useBarCodeDetectorIfSupported: false // Required for iOS WebKit stability
             }
-          },
+          } as any,
           (decodedText) => {
             if (navigator.vibrate) {
-              navigator.vibrate(100);
+              try { navigator.vibrate(100); } catch {}
             }
             const cleaned = normalizeIsbn(decodedText) || decodedText;
             toast.show(`${t('bookForm.isbnFound')}: ${cleaned}`, 'success');
@@ -133,20 +211,37 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
             setActiveMode('manual');
             triggerIsbnSearch(cleaned);
           },
-          (errorMessage) => {
+          () => {
             // Uncritical stream scanning callbacks
           }
-        ).catch((err) => {
-          console.error("Scanner startup issue:", err);
-          setScanError(t('bookForm.isbnScanError'));
-        });
+        );
+
+        // iOS Safari video inline rendering safeguards
+        const videoEl = element.querySelector('video');
+        if (videoEl) {
+          videoEl.setAttribute('playsinline', 'true');
+          videoEl.setAttribute('webkit-playsinline', 'true');
+          videoEl.muted = true;
+          videoEl.play().catch(() => {});
+        }
+
+        if (!isMounted && html5QrCode) {
+          html5QrCode.stop().then(() => {
+            html5QrCode?.clear();
+          }).catch((err) => {
+            console.error("Clean up stop failed after delayed start:", err);
+          });
+        }
       } catch (err) {
-        console.error("Scanner exception:", err);
-        setScanError(t('bookForm.isbnScanError'));
+        console.error("Scanner startup issue:", err);
+        if (isMounted) {
+          setScanError(t('bookForm.isbnScanError'));
+        }
       }
-    }, 150);
+    }, 100);
 
     return () => {
+      isMounted = false;
       clearTimeout(timer);
       if (html5QrCode) {
         if (html5QrCode.isScanning) {
@@ -391,6 +486,24 @@ export const AddWishlistV2: React.FC<AddWishlistV2Props> = ({ onAdd, onCancel })
                           </div>
                         )}
                       </div>
+
+                      <input
+                        type="file"
+                        ref={barcodePhotoInputRef}
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={handleBarcodePhotoUpload}
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => barcodePhotoInputRef.current?.click()}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 font-bold text-xs rounded-xl active:scale-95 transition-all shadow-sm"
+                      >
+                        <Camera size={16} className="text-indigo-600" />
+                        <span>{t('bookForm.isbnScanPhoto')}</span>
+                      </button>
 
                       <p className="text-[11px] font-bold text-gray-400 text-center uppercase tracking-wide">
                         {t('bookForm.isbnFound')}: {isbnInput || '...'}

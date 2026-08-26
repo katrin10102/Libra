@@ -98,6 +98,8 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
   const publisherRef = useRef<HTMLDivElement>(null);
   const genreRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const barcodePhotoInputRef = useRef<HTMLInputElement>(null);
+  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
@@ -355,6 +357,50 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
     triggerIsbnSearch(isbnInput);
   };
 
+  const handleBarcodePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      toast.show(t('app.loading'), 'info');
+      const tempId = "temp-photo-scanner-bookform";
+      let tempElem = document.getElementById(tempId);
+      if (!tempElem) {
+        tempElem = document.createElement("div");
+        tempElem.id = tempId;
+        tempElem.style.display = "none";
+        document.body.appendChild(tempElem);
+      }
+      const photoScanner = new Html5Qrcode(tempId, {
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39
+        ],
+        verbose: false
+      });
+      const decodedText = await photoScanner.scanFile(file, true);
+      photoScanner.clear();
+      if (decodedText) {
+        if (navigator.vibrate) {
+          try { navigator.vibrate(100); } catch {}
+        }
+        const cleaned = normalizeIsbn(decodedText) || decodedText;
+        toast.show(`${t('bookForm.isbnFound')}: ${cleaned}`, 'success');
+        setIsbnInput(cleaned);
+        setActiveMode('manual');
+        triggerIsbnSearch(cleaned);
+      }
+    } catch (err) {
+      console.error("Barcode photo scan error:", err);
+      toast.show(t('bookForm.isbnScanPhotoError'), 'error');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
   useEffect(() => {
     if (!showIsbnModal || activeMode !== 'scan') return;
 
@@ -363,7 +409,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
     setScanError(null);
     let isMounted = true;
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       if (!isMounted) return;
 
       try {
@@ -384,33 +430,49 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
           ],
           verbose: false
         });
+        html5QrCodeRef.current = html5QrCode;
 
-        html5QrCode.start(
-          { facingMode: "environment" },
+        // Camera resolution & device selection for iOS WebKit & Android
+        let cameraConfig: any = { facingMode: "environment" };
+        try {
+          const devices = await Html5Qrcode.getCameras();
+          if (devices && devices.length > 0) {
+            // Find back camera by label or fallback to last camera in list
+            const backCam = devices.find(d => /back|rear|environment|0/i.test(d.label)) || devices[devices.length - 1];
+            if (backCam && backCam.id) {
+              cameraConfig = backCam.id;
+            }
+          }
+        } catch (camErr) {
+          console.warn("Could not enumerate cameras, falling back to facingMode:", camErr);
+        }
+
+        if (!isMounted) return;
+
+        await html5QrCode.start(
+          cameraConfig,
           {
-            fps: 15,
-            qrbox: (w, h) => {
-              const width = w || 640;
-              const height = h || 480;
-              
-              // EAN barcodes are horizontal and wide.
-              // Let's make the scan zone occupy 85% of the camera stream's width.
-              const boxWidth = Math.round(width * 0.85);
-              // For height, let's take a generous 35% of stream height, with a minimum of 130px for easy alignment.
-              const boxHeight = Math.max(130, Math.round(height * 0.35));
-              
+            fps: 10,
+            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+              const w = Math.min(Math.round(viewfinderWidth * 0.9), 360);
+              const h = Math.min(Math.round(viewfinderHeight * 0.45), 180);
               return {
-                width: Math.min(boxWidth, width - 10),
-                height: Math.min(boxHeight, height - 10)
+                width: Math.max(w, 220),
+                height: Math.max(h, 90)
               };
             },
+            videoConstraints: {
+              facingMode: "environment",
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            },
             experimentalFeatures: {
-              useBarCodeDetectorIfSupported: true
+              useBarCodeDetectorIfSupported: false // Required for iOS WebKit stability
             }
           } as any,
           (decodedText) => {
             if (navigator.vibrate) {
-              navigator.vibrate(100);
+              try { navigator.vibrate(100); } catch {}
             }
             const cleaned = normalizeIsbn(decodedText) || decodedText;
             toast.show(`${t('bookForm.isbnFound')}: ${cleaned}`, 'success');
@@ -418,26 +480,29 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
             setActiveMode('manual');
             triggerIsbnSearch(cleaned);
           },
-          (errorMessage) => {
+          () => {
             // Uncritical scan stream callbacks
           }
-        ).then(() => {
-          // If we unmounted/stopped while it was starting, stop it now!
-          if (!isMounted && html5QrCode) {
-            html5QrCode.stop().then(() => {
-              html5QrCode?.clear();
-            }).catch((err) => {
-              console.error("Clean up stop failed after delayed start:", err);
-            });
-          }
-        }).catch((err) => {
-          console.error("Scanner startup issue:", err);
-          if (isMounted) {
-            setScanError(t('bookForm.isbnScanError'));
-          }
-        });
+        );
+
+        // iOS Safari video inline rendering safeguards
+        const videoEl = element.querySelector('video');
+        if (videoEl) {
+          videoEl.setAttribute('playsinline', 'true');
+          videoEl.setAttribute('webkit-playsinline', 'true');
+          videoEl.muted = true;
+          videoEl.play().catch(() => {});
+        }
+
+        if (!isMounted && html5QrCode) {
+          html5QrCode.stop().then(() => {
+            html5QrCode?.clear();
+          }).catch((err) => {
+            console.error("Clean up stop failed after delayed start:", err);
+          });
+        }
       } catch (err) {
-        console.error("Scanner exception:", err);
+        console.error("Scanner startup issue:", err);
         if (isMounted) {
           setScanError(t('bookForm.isbnScanError'));
         }
@@ -672,6 +737,24 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                           </div>
                         )}
                       </div>
+
+                      <input
+                        type="file"
+                        ref={barcodePhotoInputRef}
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={handleBarcodePhotoUpload}
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => barcodePhotoInputRef.current?.click()}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 font-bold text-xs rounded-xl active:scale-95 transition-all shadow-sm"
+                      >
+                        <Camera size={16} className="text-indigo-600" />
+                        <span>{t('bookForm.isbnScanPhoto')}</span>
+                      </button>
 
                       <p className="text-[11px] font-bold text-gray-400 text-center uppercase tracking-wide">
                         {t('bookForm.isbnFound')}: {isbnInput || '...'}

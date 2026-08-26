@@ -598,20 +598,28 @@ const fetchHtml = async (url: string): Promise<string> => {
       }
     } catch {}
 
-    // 2.3 Try public CORS proxies (if on static hosting like GitHub Pages in mobile/desktop browser)
+    // 2.3 Try public CORS proxies (specifically for static hosting like GitHub Pages in mobile/desktop browser)
     const publicProxies = [
-      `https://corsproxy.org/?${encodeURIComponent(targetUrl)}`,
-      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`
+      { url: `https://proxy.cors.sh/${targetUrl}`, isJson: false },
+      { url: `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`, isJson: true },
+      { url: `https://corsproxy.org/?${encodeURIComponent(targetUrl)}`, isJson: false },
+      { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`, isJson: false }
     ];
 
-    for (const pUrl of publicProxies) {
+    for (const p of publicProxies) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
-        const res = await fetch(pUrl, { signal: controller.signal });
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(p.url, { signal: controller.signal });
         clearTimeout(timeoutId);
         if (res.ok) {
-          const text = await res.text();
+          let text = '';
+          if (p.isJson) {
+            const j = await res.json();
+            text = j?.contents || '';
+          } else {
+            text = await res.text();
+          }
           if (text && text.length > 300 && !text.includes('id="root"')) {
             return text;
           }

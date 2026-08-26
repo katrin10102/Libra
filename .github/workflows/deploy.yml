@@ -42,7 +42,7 @@ jobs:
             BASE="/$REPO_NAME/"
           fi
 
-          npm run build -- --base="$BASE"
+          npx vite build --base="$BASE"
           cp dist/index.html dist/404.html
 
       - name: Upload Pages Artifact

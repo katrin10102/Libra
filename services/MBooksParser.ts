@@ -598,7 +598,28 @@ const fetchHtml = async (url: string): Promise<string> => {
       }
     } catch {}
 
-    // 2.3 Try direct fetch (if CORS allowed or WebView mode)
+    // 2.3 Try public CORS proxies (if on static hosting like GitHub Pages in mobile/desktop browser)
+    const publicProxies = [
+      `https://corsproxy.org/?${encodeURIComponent(targetUrl)}`,
+      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`
+    ];
+
+    for (const pUrl of publicProxies) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(pUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const text = await res.text();
+          if (text && text.length > 300 && !text.includes('id="root"')) {
+            return text;
+          }
+        }
+      } catch {}
+    }
+
+    // 2.4 Try direct fetch (if CORS allowed or WebView mode)
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);

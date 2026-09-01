@@ -29,7 +29,13 @@ export const decodeHtmlEntities = (str?: string): string => {
 
 export const cleanAuthorString = (authorStr?: string): string => {
   if (!authorStr) return 'Невідомий автор';
-  const names = authorStr.split(/[,;\/&]/).map((s) => s.trim()).filter(Boolean);
+  
+  const decoded = decodeHtmlEntities(authorStr);
+  const names = decoded
+    .split(/[,;\/&|]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   const filteredNames = names.filter((name) => {
     const lower = name.toLowerCase();
     return (
@@ -39,12 +45,51 @@ export const cleanAuthorString = (authorStr?: string): string => {
       !lower.includes('редактор') &&
       !lower.includes('дизайн') &&
       !lower.includes('укладач') &&
-      !lower.includes('художник')
+      !lower.includes('художник') &&
+      !lower.includes('автор:') &&
+      !lower.includes('автори:')
     );
   });
 
-  if (filteredNames.length === 0) return decodeHtmlEntities(authorStr.trim());
-  return decodeHtmlEntities(filteredNames.join(', '));
+  const candidates = filteredNames.length > 0 ? filteredNames : [decoded.trim()];
+  const uniqueNames: string[] = [];
+
+  for (let name of candidates) {
+    name = name.replace(/^[\s,;.-]+|[\s,;.-]+$/g, '').trim();
+    if (!name || name === '-') continue;
+
+    // Deduplicate case-insensitively
+    const exists = uniqueNames.some((u) => u.toLowerCase() === name.toLowerCase());
+    if (exists) continue;
+
+    // Check if name has a duplicated leading initial prefix of an already added author (e.g. "Е" + "Еверіна Максвелл")
+    const hasCorruptedPrefix = uniqueNames.some((u) => {
+      if (name.length > u.length && name.endsWith(u)) {
+        const prefix = name.slice(0, name.length - u.length).trim();
+        if (prefix.length <= 2) return true;
+      }
+      return false;
+    });
+    if (hasCorruptedPrefix) continue;
+
+    // Check if an existing author had the corrupted prefix and current name is the cleaner shorter one
+    const corruptIndex = uniqueNames.findIndex((u) => {
+      if (u.length > name.length && u.endsWith(name)) {
+        const prefix = u.slice(0, u.length - name.length).trim();
+        if (prefix.length <= 2) return true;
+      }
+      return false;
+    });
+
+    if (corruptIndex !== -1) {
+      uniqueNames[corruptIndex] = name;
+      continue;
+    }
+
+    uniqueNames.push(name);
+  }
+
+  return uniqueNames.length > 0 ? uniqueNames.join(', ') : 'Невідомий автор';
 };
 
 export class MBooksParser {
@@ -149,18 +194,29 @@ export class MBooksParser {
       }
     }
 
-    // 2. Author (from /authors/ link or RSC state)
-    const authorRegex = /<a[^>]+href="\/authors\/[^"]*"[^>]*>([\s\S]*?)<\/a>/gi;
-    const authors: string[] = [];
+    // 2. Author (from /authors/ links mapped by slug to avoid avatar badge duplication and repeated entries)
+    const authorSlugMap = new Map<string, string>();
+    const authorRegex = /<a[^>]+href=["'](\/authors\/([^/"']+)\/?)["'][^>]*>([\s\S]*?)<\/a>/gi;
     let authorMatch;
     while ((authorMatch = authorRegex.exec(html)) !== null) {
-      const authorName = decodeHtmlEntities(authorMatch[1].replace(/<[^>]+>/g, '').trim());
-      if (authorName && !authors.includes(authorName)) {
-        authors.push(authorName);
+      const slug = authorMatch[2];
+      const innerHtml = authorMatch[3];
+      const pMatch = innerHtml.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+      let name = '';
+      if (pMatch) {
+        name = decodeHtmlEntities(pMatch[1].replace(/<[^>]+>/g, '').trim());
+      } else {
+        const cleaned = innerHtml.replace(/<div[\s\S]*?<\/div>/gi, '').replace(/<[^>]+>/g, '').trim();
+        name = decodeHtmlEntities(cleaned || innerHtml.replace(/<[^>]+>/g, '').trim());
+      }
+      if (name && slug) {
+        if (!authorSlugMap.has(slug) || name.length < authorSlugMap.get(slug)!.length) {
+          authorSlugMap.set(slug, name);
+        }
       }
     }
-    if (authors.length > 0) {
-      result.author = cleanAuthorString(authors.join(', '));
+    if (authorSlugMap.size > 0) {
+      result.author = cleanAuthorString(Array.from(authorSlugMap.values()).join(', '));
     }
 
     // 3. Cover Image

@@ -20,9 +20,63 @@ const BROWSER_HEADERS = {
 
 const cleanAuthorString = (authorStr: string): string => {
   if (!authorStr) return 'Невідомий автор';
-  const names = authorStr.split(/[,;\/&]/).map(s => s.trim()).filter(Boolean);
-  const filtered = names.filter(n => !n.toLowerCase().includes('переклад') && !n.toLowerCase().includes('іллюстратор'));
-  return filtered.length > 0 ? filtered.join(', ') : authorStr.trim();
+  
+  const names = authorStr
+    .split(/[,;\/&|]/)
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  const filtered = names.filter(name => {
+    const lower = name.toLowerCase();
+    return (
+      !lower.includes('переклад') &&
+      !lower.includes('іллюстратор') &&
+      !lower.includes('ілюстратор') &&
+      !lower.includes('редактор') &&
+      !lower.includes('дизайн') &&
+      !lower.includes('укладач') &&
+      !lower.includes('художник') &&
+      !lower.includes('автор:') &&
+      !lower.includes('автори:')
+    );
+  });
+
+  const candidates = filtered.length > 0 ? filtered : [authorStr.trim()];
+  const uniqueNames: string[] = [];
+
+  for (let name of candidates) {
+    name = name.replace(/^[\s,;.-]+|[\s,;.-]+$/g, '').trim();
+    if (!name || name === '-') continue;
+
+    const exists = uniqueNames.some(u => u.toLowerCase() === name.toLowerCase());
+    if (exists) continue;
+
+    const hasCorruptedPrefix = uniqueNames.some(u => {
+      if (name.length > u.length && name.endsWith(u)) {
+        const prefix = name.slice(0, name.length - u.length).trim();
+        if (prefix.length <= 2) return true;
+      }
+      return false;
+    });
+    if (hasCorruptedPrefix) continue;
+
+    const corruptIndex = uniqueNames.findIndex(u => {
+      if (u.length > name.length && u.endsWith(name)) {
+        const prefix = u.slice(0, u.length - name.length).trim();
+        if (prefix.length <= 2) return true;
+      }
+      return false;
+    });
+
+    if (corruptIndex !== -1) {
+      uniqueNames[corruptIndex] = name;
+      continue;
+    }
+
+    uniqueNames.push(name);
+  }
+
+  return uniqueNames.length > 0 ? uniqueNames.join(', ') : 'Невідомий автор';
 };
 
 const normalizeIsbn = (input?: string | null): string => {
@@ -87,16 +141,35 @@ app.get('/api/lookup-isbn', async (req, res) => {
         result.title = titleMatch[1].replace(/<[^>]+>/g, '').trim();
       }
 
-      // Authors from links
-      const authorRegex = /<a[^>]+href="\/authors\/[^"]*"[^>]*>([\s\S]*?)<\/a>/gi;
-      const authors: string[] = [];
+      // Authors from links (mapped by author slug to avoid duplicates and avatar prefix corruption)
+      const authorSlugMap = new Map<string, string>();
+      const authorRegex = /<a[^>]+href=["'](\/authors\/([^/"']+)\/?)["'][^>]*>([\s\S]*?)<\/a>/gi;
       let authorMatch;
       while ((authorMatch = authorRegex.exec(bookHtml)) !== null) {
-        const aName = authorMatch[1].replace(/<[^>]+>/g, '').trim();
-        if (aName && !authors.includes(aName)) authors.push(aName);
+        const slug = authorMatch[2];
+        const innerHtml = authorMatch[3];
+        const pMatch = innerHtml.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+        let name = '';
+        if (pMatch) {
+          name = pMatch[1].replace(/<[^>]+>/g, '').trim();
+        } else {
+          const cleaned = innerHtml.replace(/<div[\s\S]*?<\/div>/gi, '').replace(/<[^>]+>/g, '').trim();
+          name = cleaned || innerHtml.replace(/<[^>]+>/g, '').trim();
+        }
+        if (name && slug) {
+          if (!authorSlugMap.has(slug) || name.length < authorSlugMap.get(slug)!.length) {
+            authorSlugMap.set(slug, name);
+          }
+        }
       }
-      if (authors.length > 0) {
-        result.author = cleanAuthorString(authors.join(', '));
+
+      if (authorSlugMap.size > 0) {
+        result.author = cleanAuthorString(Array.from(authorSlugMap.values()).join(', '));
+      } else {
+        const stateAuthorMatch = bookHtml.match(/[\\"]*firstName[\\"]*:\s*[\\"]*([^"\\]+)[\\"]*,\s*[\\"]*lastName[\\"]*:\s*[\\"]*([^"\\]+)[\\"]*/i);
+        if (stateAuthorMatch) {
+          result.author = cleanAuthorString(`${stateAuthorMatch[1]} ${stateAuthorMatch[2]}`);
+        }
       }
 
       // Cover

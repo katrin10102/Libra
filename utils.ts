@@ -114,6 +114,7 @@ export const normalizeIsbn = (input?: string | null): string => {
   return input
     .replace(/^ISBN[-:\s]*/i, '')
     .replace(/^EAN[-:\s]*/i, '')
+    .replace(/[\u0425\u0445]/g, 'X') // Ukrainian/Cyrillic 'Х'/'х' -> Latin 'X'
     .replace(/[^0-9Xx]/g, '')
     .trim();
 };

@@ -84,6 +84,7 @@ const normalizeIsbn = (input?: string | null): string => {
   return input
     .replace(/^ISBN[-:\s]*/i, '')
     .replace(/^EAN[-:\s]*/i, '')
+    .replace(/[\u0425\u0445]/g, 'X') // Ukrainian/Cyrillic 'Х'/'х' -> Latin 'X'
     .replace(/[^0-9Xx]/g, '')
     .trim();
 };
@@ -103,14 +104,12 @@ app.get('/api/lookup-isbn', async (req, res) => {
     const searchRes = await fetch(searchUrl, { headers: BROWSER_HEADERS });
     const searchHtml = await searchRes.text();
 
-    const slugRegex = /[\\"]*slug[\\"]*:\s*[\\"]*(\d+-[^"\\\s,]+)/g;
-    let match;
     let bookSlug: string | null = null;
-
+    const slugRegex = /slug[^:]*:\s*[^0-9]*(\d+-[a-zA-Z0-9_-]+)/gi;
+    let match;
     while ((match = slugRegex.exec(searchHtml)) !== null) {
-      const slug = match[1].replace(/\\+$/, '');
-      if (/^\d+-/.test(slug)) {
-        bookSlug = slug;
+      if (/^\d+-/.test(match[1])) {
+        bookSlug = match[1];
         break;
       }
     }

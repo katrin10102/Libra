@@ -116,12 +116,12 @@ export class MBooksParser {
 
     if (!html) return null;
 
-    // Strategy 1: Match Next.js RSC state escaped and unescaped slugs
-    const slugRegex = /[\\"]*slug[\\"]*:\s*[\\"]*(\d+-[^"\\\s,]+)/g;
+    // Strategy 1: Match Next.js RSC state escaped and unescaped slugs (e.g. slug":"595183-naperstianka")
+    const slugRegex = /slug[^:]*:\s*[^0-9]*(\d+-[a-zA-Z0-9_-]+)/gi;
     let match;
     const matchedSlugs: string[] = [];
     while ((match = slugRegex.exec(html)) !== null) {
-      const slug = match[1].replace(/\\+$/, '');
+      const slug = match[1];
       if (/^\d+-/.test(slug) && !matchedSlugs.includes(slug)) {
         matchedSlugs.push(slug);
       }
@@ -508,10 +508,30 @@ export class MBooksParser {
 
     if (onStep) onStep(1); // Крок 1: Пошук посилання / книги
 
+    const isNative =
+      (typeof Capacitor !== 'undefined' && (Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'web')) ||
+      (typeof (window as any)?.Capacitor !== 'undefined' && typeof (window as any)?.Capacitor?.isNativePlatform === 'function' && (window as any).Capacitor.isNativePlatform());
+
+    // If native Capacitor app, query MBooks via CapacitorHttp first (bypasses CORS natively)
+    if (isNative) {
+      try {
+        const href = await this.searchByIsbn(cleanIsbn);
+        if (href) {
+          if (onStep) onStep(2); // Крок 2: Отримання деталей книги
+          const book = await this.getBookDetails(href);
+          if (book && book.title && book.title !== 'Невідома назва') {
+            return book;
+          }
+        }
+      } catch (e) {
+        console.warn('Native MBooks search failed, falling back...', e);
+      }
+    }
+
     // Tier 1: Server-side unified lookup (fastest & most reliable when backend is present)
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
       const res = await fetch(`/api/lookup-isbn?isbn=${encodeURIComponent(cleanIsbn)}`, {
         signal: controller.signal
       });

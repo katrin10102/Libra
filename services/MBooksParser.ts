@@ -106,7 +106,7 @@ export class MBooksParser {
     const cleanIsbn = normalizeIsbn(isbn);
     if (!cleanIsbn) return null;
 
-    const url = `/api/search/?query=${encodeURIComponent(cleanIsbn)}`;
+    const url = `/api/search/?query=${encodeURIComponent(cleanIsbn)}&_t=${Date.now()}`;
     let html: string;
     try {
       html = await this.fetchHtml(url);
@@ -167,7 +167,7 @@ export class MBooksParser {
    */
   async getBookDetails(href: string): Promise<ParsedBook | null> {
     const cleanHref = href.startsWith('/') ? href : `/${href}`;
-    const url = `/api${cleanHref}`;
+    const url = `/api${cleanHref}${cleanHref.includes('?') ? '&' : '?'}_t=${Date.now()}`;
     let html: string;
     try {
       html = await this.fetchHtml(url);
@@ -508,11 +508,35 @@ export class MBooksParser {
 
     if (onStep) onStep(1); // Крок 1: Пошук посилання / книги
 
+    // Tier 1: Server-side unified lookup (fastest & most reliable, bypasses CORS and mobile network limits)
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(`/api/lookup-isbn?isbn=${encodeURIComponent(cleanIsbn)}&_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data && json.data.title && json.data.title !== 'Невідома назва') {
+          return json.data;
+        }
+      }
+    } catch (e) {
+      console.warn('Server-side lookup not reachable or timed out, trying fallbacks...', e);
+    }
+
     const isNative =
       (typeof Capacitor !== 'undefined' && (Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'web')) ||
       (typeof (window as any)?.Capacitor !== 'undefined' && typeof (window as any)?.Capacitor?.isNativePlatform === 'function' && (window as any).Capacitor.isNativePlatform());
 
-    // If native Capacitor app, query MBooks via CapacitorHttp first (bypasses CORS natively)
+    // If native Capacitor app, query MBooks via CapacitorHttp (bypasses CORS natively)
     if (isNative) {
       try {
         const href = await this.searchByIsbn(cleanIsbn);
@@ -526,25 +550,6 @@ export class MBooksParser {
       } catch (e) {
         console.warn('Native MBooks search failed, falling back...', e);
       }
-    }
-
-    // Tier 1: Server-side unified lookup (fastest & most reliable when backend is present)
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
-      const res = await fetch(`/api/lookup-isbn?isbn=${encodeURIComponent(cleanIsbn)}`, {
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.data && json.data.title && json.data.title !== 'Невідома назва') {
-          return json.data;
-        }
-      }
-    } catch {
-      // Backend not reached or static site, proceed to client-side parsing
     }
 
     // Tier 2: Client-side MBooks search and extraction

@@ -89,6 +89,14 @@ const normalizeIsbn = (input?: string | null): string => {
     .trim();
 };
 
+// Disable caching for all API responses so mobile devices never get stale data
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+
 // API: Direct Server-Side ISBN Lookup
 app.get('/api/lookup-isbn', async (req, res) => {
   const rawIsbn = req.query.isbn as string;

@@ -97,6 +97,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
   const [showIsbnModal, setShowIsbnModal] = useState(false);
   const [isbnInput, setIsbnInput] = useState('');
   const [isbnStep, setIsbnStep] = useState<number | null>(null);
+  const [isbnStepMessage, setIsbnStepMessage] = useState<string | null>(null);
   const [activeMode, setActiveMode] = useState<'manual' | 'scan'>('manual');
   const [scanError, setScanError] = useState<string | null>(null);
 
@@ -325,14 +326,17 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
     }
 
     setIsbnStep(1); // Крок 1: Пошук посилання
+    setIsbnStepMessage('Пошук книги за ISBN...');
     try {
-      const parsedBook = await parserInstance.searchWithFallback(cleanIsbn, (step) => {
+      const parsedBook = await parserInstance.searchWithFallback(cleanIsbn, (step, message) => {
         setIsbnStep(step);
+        if (message) setIsbnStepMessage(message);
       });
 
       if (!parsedBook) {
         toast.show(t('bookForm.isbnLookupError'), 'error');
         setIsbnStep(null);
+        setIsbnStepMessage(null);
         return;
       }
 
@@ -358,6 +362,7 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
       toast.show(t('bookForm.isbnLookupError'), 'error');
     } finally {
       setIsbnStep(null);
+      setIsbnStepMessage(null);
     }
   };
 
@@ -623,16 +628,16 @@ export const BookFormV2: React.FC<BookFormV2Props> = ({
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-800">{t('bookForm.isbnLookup')}</h3>
-                  <p className="text-xs text-gray-400 font-medium">mbooks.com.ua</p>
+                  <p className="text-xs text-gray-400 font-medium">MBooks • Goodreads • Open Library</p>
                 </div>
               </div>
 
               {isbnStep !== null ? (
-                <div className="py-8 flex flex-col items-center justify-center gap-4">
+                <div className="py-8 flex flex-col items-center justify-center gap-4 text-center px-2">
                   <Loader2 className="animate-spin text-indigo-600" size={36} />
                   <div className="text-center">
-                    <p className="text-sm font-bold text-gray-800">
-                      {isbnStep === 1 ? t('bookForm.isbnLookupStep1') : t('bookForm.isbnLookupStep2')}
+                    <p className="text-sm font-bold text-gray-800 leading-snug">
+                      {isbnStepMessage || (isbnStep === 1 ? t('bookForm.isbnLookupStep1') : t('bookForm.isbnLookupStep2'))}
                     </p>
                     <p className="text-xs text-gray-400 mt-1 font-medium">{t('app.loading')}</p>
                   </div>

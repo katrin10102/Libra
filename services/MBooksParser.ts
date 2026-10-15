@@ -1,5 +1,6 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { normalizeIsbn } from '../utils';
+import { GoodreadsParser } from './GoodreadsParser';
 
 export interface ParsedBook {
   title: string;
@@ -494,21 +495,48 @@ export class MBooksParser {
   }
 
   /**
+   * Fallback: Search in Goodreads by ISBN
+   */
+  async searchGoodreads(isbn: string): Promise<ParsedBook | null> {
+    const cleanIsbn = normalizeIsbn(isbn);
+    if (!cleanIsbn) return null;
+
+    try {
+      const goodreadsParser = new GoodreadsParser(this.fetchHtml);
+      const href = await goodreadsParser.searchByIsbn(cleanIsbn);
+      if (href) {
+        const book = await goodreadsParser.getBookDetails(href, cleanIsbn);
+        if (book && book.title && book.title !== 'Невідома назва') {
+          return {
+            ...book,
+            author: cleanAuthorString(book.author)
+          };
+        }
+      }
+    } catch {
+      // Quiet fallback if Goodreads is unreachable
+    }
+
+    return null;
+  }
+
+  /**
    * Unified search method:
    * 1. Fast server lookup endpoint (/api/lookup-isbn) when backend is available
    * 2. Direct client-side MBooks search & detail parsing (works on Native Android/iOS via CapacitorHttp and Web via proxy)
+   * 2.5 Goodreads fallback (if no results from client-side MBooks parsing)
    * 3. Parallel fallback to Open Library, Google Books, and Apple Books
    */
   async searchWithFallback(
     isbn: string,
-    onStep?: (step: number) => void
+    onStep?: (step: number, message?: string) => void
   ): Promise<ParsedBook | null> {
     const cleanIsbn = normalizeIsbn(isbn);
     if (!cleanIsbn) return null;
 
-    if (onStep) onStep(1); // Крок 1: Пошук посилання / книги
+    if (onStep) onStep(1, 'Пошук книги за ISBN (MBooks, Goodreads, Open Library)...');
 
-    // Tier 1: Server-side unified lookup (fastest & most reliable, bypasses CORS and mobile network limits)
+    // Tier 1: Server-side unified lookup (fastest & most reliable: MBooks -> Goodreads -> Open Library -> Google Books)
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -539,9 +567,10 @@ export class MBooksParser {
     // If native Capacitor app, query MBooks via CapacitorHttp (bypasses CORS natively)
     if (isNative) {
       try {
+        if (onStep) onStep(1, 'Пошук книги на mbooks.com.ua...');
         const href = await this.searchByIsbn(cleanIsbn);
         if (href) {
-          if (onStep) onStep(2); // Крок 2: Отримання деталей книги
+          if (onStep) onStep(2, 'Отримання та аналіз детальної інформації про книгу...');
           const book = await this.getBookDetails(href);
           if (book && book.title && book.title !== 'Невідома назва') {
             return book;
@@ -554,9 +583,10 @@ export class MBooksParser {
 
     // Tier 2: Client-side MBooks search and extraction
     try {
+      if (onStep) onStep(1, 'Пошук книги на mbooks.com.ua...');
       const href = await this.searchByIsbn(cleanIsbn);
       if (href) {
-        if (onStep) onStep(2); // Крок 2: Отримання деталей книги
+        if (onStep) onStep(2, 'Отримання та аналіз детальної інформації про книгу...');
         const book = await this.getBookDetails(href);
         if (book && book.title && book.title !== 'Невідома назва') {
           return book;
@@ -566,8 +596,19 @@ export class MBooksParser {
       console.warn('MBooks client parser failed, proceeding to fallback providers...', e);
     }
 
+    // Tier 2.5: Goodreads Fallback (клієнтський пошук та парсинг через GoodreadsParser)
+    try {
+      if (onStep) onStep(2, 'Пошук книги в каталозі Goodreads...');
+      const goodreadsBook = await this.searchGoodreads(cleanIsbn);
+      if (goodreadsBook && goodreadsBook.title && goodreadsBook.title !== 'Невідома назва') {
+        return goodreadsBook;
+      }
+    } catch (e) {
+      console.warn('Goodreads fallback search failed:', e);
+    }
+
     // Tier 3: Parallel search across Open Library, Google Books, iTunes
-    if (onStep) onStep(2); // Крок 2: Отримання деталей книги
+    if (onStep) onStep(3, 'Шукаємо в Open Library, Google Books та Apple Books...');
 
     try {
       const results = await Promise.allSettled([
@@ -613,6 +654,10 @@ const fetchHtml = async (url: string): Promise<string> => {
       fullUrl = url.replace(/^\/api\//, 'https://mbooks.com.ua/');
     } else if (url.startsWith('/api')) {
       fullUrl = url.replace(/^\/api/, 'https://mbooks.com.ua');
+    } else if (url.startsWith('/goodreads-api/')) {
+      fullUrl = url.replace(/^\/goodreads-api\//, 'https://www.goodreads.com/');
+    } else if (url.startsWith('/goodreads-api')) {
+      fullUrl = url.replace(/^\/goodreads-api/, 'https://www.goodreads.com');
     }
 
     try {
@@ -633,6 +678,82 @@ const fetchHtml = async (url: string): Promise<string> => {
   }
 
   // 2. Web Browser (Dev / Preview / Production)
+  if (url.startsWith('/goodreads-api')) {
+    // 2.1 Direct relative /goodreads-api via server proxy
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(url, {
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,application/json,*/*;q=0.8'
+        },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const text = await res.text();
+        const isSpaFallback =
+          (text.includes('<div id="root">') || text.includes('src="/src/main.tsx"') || text.includes('src="/index.tsx"')) &&
+          !text.includes('goodreads') &&
+          !text.includes('bookTitle');
+
+        if (!isSpaFallback && text.length > 50) {
+          return text;
+        }
+      }
+    } catch (e) {
+      console.warn('Direct /goodreads-api fetch failed:', e);
+    }
+
+    // 2.2 Try universal backend proxy
+    const targetUrl = `https://www.goodreads.com${url.replace(/^\/goodreads-api/, '')}`;
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(`/api/proxy?url=${encodeURIComponent(targetUrl)}`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const text = await res.text();
+        if (text && text.length > 50 && !text.includes('id="root"')) {
+          return text;
+        }
+      }
+    } catch {}
+
+    // 2.3 Try public CORS proxies (for static hosting without server backend)
+    const publicProxies = [
+      { url: `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`, isJson: true },
+      { url: `https://corsproxy.org/?${encodeURIComponent(targetUrl)}`, isJson: false },
+      { url: `https://proxy.cors.sh/${targetUrl}`, isJson: false }
+    ];
+
+    for (const p of publicProxies) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(p.url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          let text = '';
+          if (p.isJson) {
+            const j = await res.json();
+            text = j?.contents || '';
+          } else {
+            text = await res.text();
+          }
+          if (text && text.length > 100 && !text.includes('id="root"')) {
+            return text;
+          }
+        }
+      } catch {}
+    }
+
+    throw new Error('All fetch methods for /goodreads-api failed');
+  }
+
   if (url.startsWith('/api')) {
     // 2.1 First try direct relative /api (works on server backend)
     try {
@@ -726,7 +847,7 @@ const fetchHtml = async (url: string): Promise<string> => {
   // Direct absolute external URL
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
     if (!response.ok) {
